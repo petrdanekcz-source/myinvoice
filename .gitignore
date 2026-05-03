@@ -17,7 +17,7 @@ web/dist.bak/
 manual/generated/
 manual/generated.bak/
 publish.cmd
-production.cmd
+last_deploy.log
 
 # OS junk
 .DS_Store
