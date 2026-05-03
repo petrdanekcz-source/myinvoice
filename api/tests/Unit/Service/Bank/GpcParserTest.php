@@ -124,6 +124,65 @@ final class GpcParserTest extends TestCase
         self::assertSame(-500.0, $parser->parse($header . "\n" . $tx)['transactions'][0]['amount']);
     }
 
+    /**
+     * Issue #1: Air Bank GPC s diakritikou v názvu účtu (`Hlavní podnikatelský`).
+     * Před fixem se po iconv→UTF-8 multibyte znaky `í`,`ý` natáhly z 1 na 2 bajty
+     * a všechny offsety za názvem se posunuly → statement_date null, balances rozbité.
+     */
+    public function testAirBankHeaderWithCzechDiacritics(): void
+    {
+        // Raw CP1250 bajty (jak je banka generuje). \xed = í, \xfd = ý.
+        $cp1250Header = '074'
+            . '0000002847527018'                         // account 16
+            . "Hlavn\xed podnikatelsk\xfd"               // name 20 single-byte chars in CP1250
+            . '310326'                                    // old_balance_date 31.3.2026
+            . '00000001797559' . '+'                      // prev 17975.59
+            . '00000001355384' . '+'                      // curr 13553.84
+            . '00000004919425' . '0'                      // debit 49194.25, sign='0' (Air Bank)
+            . '00000004477250' . '0'                      // credit 44772.50, sign='0'
+            . '004'                                        // statement_no
+            . '300426';                                    // statement_date 30.4.2026
+
+        $parser = new GpcParser();
+
+        // 1) parse z raw CP1250 vstupu
+        $r = $parser->parse($cp1250Header);
+        self::assertSame('0000002847527018', $r['header']['account_number']);
+        self::assertSame('2026-04-30',       $r['header']['statement_date']);
+        self::assertSame('004',              $r['header']['statement_number']);
+        self::assertSame(17975.59,           $r['header']['prev_balance']);
+        self::assertSame(13553.84,           $r['header']['curr_balance']);
+        self::assertSame(49194.25,           $r['header']['debit_total']);
+        self::assertSame(44772.50,           $r['header']['credit_total']);
+
+        // 2) parse vstupu už převedeného na UTF-8 (např. user otevřel a uložil v editoru)
+        $utf8Header = iconv('CP1250', 'UTF-8', $cp1250Header);
+        $r2 = $parser->parse($utf8Header);
+        self::assertSame('2026-04-30', $r2['header']['statement_date']);
+        self::assertSame(17975.59,     $r2['header']['prev_balance']);
+        self::assertSame(49194.25,     $r2['header']['debit_total']);
+    }
+
+    /**
+     * Defenzivní fallback: když statement_date nelze rozparsovat (poškozený řádek),
+     * parser nesmí crashnout SQL insert (statement_date NOT NULL) — fallback na
+     * old_balance_date, případně na dnešní datum.
+     */
+    public function testStatementDateFallbackToOldBalanceDate(): void
+    {
+        // Vyrobíme řádek s VALID old_balance_date ale INVALID statement_date (samé mezery).
+        $line = '074'
+            . str_pad('1', 16) . str_pad('', 20) . '150326'        // old_balance_date 15.3.2026
+            . str_pad('0', 14, '0') . '+' . str_pad('0', 14, '0') . '+'
+            . str_pad('0', 14, '0') . '+' . str_pad('0', 14, '0') . '+'
+            . '001'
+            . '      ';                                              // statement_date = blank
+
+        $parser = new GpcParser();
+        $r = $parser->parse($line);
+        self::assertSame('2026-03-15', $r['header']['statement_date']);
+    }
+
     public function testThrowsOnMissingHeader(): void
     {
         $parser = new GpcParser();

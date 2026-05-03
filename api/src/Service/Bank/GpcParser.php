@@ -19,10 +19,20 @@ final class GpcParser
 {
     public function parse(string $content): array
     {
-        // GPC je v CP1250 (Windows Czech). Převod na UTF-8.
-        if (!mb_check_encoding($content, 'UTF-8')) {
-            $content = @iconv('CP1250', 'UTF-8//TRANSLIT', $content) ?: $content;
+        // GPC formát je fixed-width (single-byte CP1250). DŮLEŽITÉ: parsujeme z RAW CP1250
+        // bajtů, jinak se po iconv→UTF-8 multibyte znaky v poli "account name" (např. `í`,
+        // `ý`) protáhnou ze 1 na 2 bajty a všechny offsety za názvem se posunou. Iconv až
+        // na konkrétních textových polích po extrakci.
+        $isUtf8 = mb_check_encoding($content, 'UTF-8');
+        // Pokud vstup vypadá jako UTF-8 a obsahuje multibyte znaky, převeď zpět na CP1250
+        // pro byte-aligned parsing (TRANSLIT zachová ASCII digity beze změny).
+        if ($isUtf8 && preg_match('/[\x80-\xFF]/', $content)) {
+            $back = @iconv('UTF-8', 'CP1250//TRANSLIT//IGNORE', $content);
+            if ($back !== false) {
+                $content = $back;
+            }
         }
+
         $lines = preg_split('/\r\n|\n|\r/', $content);
         $header = null;
         $transactions = [];
@@ -67,8 +77,14 @@ final class GpcParser
     {
         $pad = str_pad($line, 128, ' ');
         $accountNumber = trim(substr($pad, 3, 16));
+        $oldBalanceDate = $this->parseDate(trim(substr($pad, 39, 6)));
         // Statement date je na pozici 108-114 (DDMMYY); pos 39-45 je old_balance_date.
         $statementDate = $this->parseDate(trim(substr($pad, 108, 6)));
+        // Fallback: některé banky (Air Bank) občas vrátí nesmyslnou hodnotu / chybný layout —
+        // místo SQL crashe použij old_balance_date (datum předchozí pozice = den před výpisem).
+        if ($statementDate === null) {
+            $statementDate = $oldBalanceDate ?? date('Y-m-d');
+        }
         // Pozn.: balance sign je BYTE PŘED hodnotou v pythonu — substr(59,1) + substr(45,14) — viz reference.
         $prevBalance = $this->parseAmountWithSign(substr($pad, 45, 14), substr($pad, 59, 1));
         $currBalance = $this->parseAmountWithSign(substr($pad, 60, 14), substr($pad, 74, 1));
@@ -120,7 +136,8 @@ final class GpcParser
         if ($ks === '') $ks = trim(substr($pad, 77, 4));
         $ss = trim(substr($pad, 81, 10), " 0");
         if ($ss === '') $ss = trim(substr($pad, 81, 10));
-        $description = trim(substr($pad, 97, 20));   // pozice 98-117 (client_name)
+        // Pole textová — konverze CP1250 → UTF-8 až po byte-aligned extrakci.
+        $description = $this->cp1250ToUtf8(trim(substr($pad, 97, 20)));   // pozice 98-117 (client_name)
         $currency = trim(substr($pad, 117, 5));      // pozice 118-122 (currency code)
         $postedAt = $this->parseDate(trim(substr($pad, 122, 6)));   // pozice 123-128 DDMMYY
 
@@ -171,6 +188,13 @@ final class GpcParser
             '36'  => 'AUD', '392' => 'JPY',
         ];
         return $map[$stripped] ?? null;
+    }
+
+    private function cp1250ToUtf8(string $s): string
+    {
+        if ($s === '' || mb_check_encoding($s, 'ASCII')) return $s;
+        $u = @iconv('CP1250', 'UTF-8//TRANSLIT', $s);
+        return $u !== false ? $u : $s;
     }
 
     private function parseAmountWithSign(string $rawAmount, string $sign): float

@@ -5,6 +5,22 @@ All notable changes to MyInvoice.cz are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **GPC parser: Air Bank výpisy s diakritikou v názvu účtu** ([#1]). Pole
+  fixed-width hlavičky (074) se parsovala až po `iconv CP1250→UTF-8`, takže
+  vícebajtové znaky (`í`, `ý` v `Hlavní podnikatelský`) posunuly všechny
+  offsety za polem názvu o 2 bajty — `statement_date` vyšel jako null a
+  insert do `bank_statements` failoval s `Integrity constraint violation`.
+  Parser teď extrahuje pole z **raw CP1250 bajtů** (single-byte) a UTF-8
+  konverzi aplikuje až na konkrétní textová pole. Přidán defenzivní fallback:
+  pokud `statement_date` přesto vyjde null, použije se `old_balance_date`
+  místo SQL crashe.
+
+[#1]: https://github.com/radekhulan/myinvoice/issues/1
+
 ## [1.3.0] — 2026-05-04
 
 ### Added
