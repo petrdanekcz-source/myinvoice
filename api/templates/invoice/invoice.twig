@@ -299,6 +299,9 @@
 <div class="note">{{ invoice.note_below_items|nl2br }}</div>
 {% endif %}
 
+{% if supplier.commercial_register %}
+<div class="commercial-register">{{ supplier.commercial_register }}</div>
+{% endif %}
 <div class="footer">
   {{ supplier.company_name }}{% if supplier.web %} · {{ supplier.web }}{% endif %}{% if supplier.email %} · {{ supplier.email }}{% endif %}
 </div>
@@ -363,6 +366,9 @@
   </tbody>
 </table>
 
+{% if supplier.commercial_register %}
+<div class="commercial-register">{{ supplier.commercial_register }}</div>
+{% endif %}
 <div class="footer">
   {{ supplier.company_name }}{% if supplier.web %} · {{ supplier.web }}{% endif %}{% if supplier.email %} · {{ supplier.email }}{% endif %}
 </div>

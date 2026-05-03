@@ -90,6 +90,7 @@ final class SnapshotBuilder
             'phone'        => $row['phone'],
             'web'          => $row['web'],
             'tagline'      => $row['tagline'] ?? null,
+            'commercial_register' => $row['commercial_register'] ?? null,
         ];
     }
 

@@ -349,6 +349,14 @@ table.bank-frame td {
 }
 
 /* Footer */
+.commercial-register {
+    margin-top: 6mm;
+    margin-bottom: -4mm;
+    text-align: center;
+    font-size: 8pt;
+    color: #7A748C;
+    font-family: 'DejaVu Sans', sans-serif;
+}
 .footer {
     margin-top: 6mm;
     padding-top: 3mm;

@@ -18,6 +18,7 @@ export interface Supplier {
   phone: string | null
   web: string | null
   tagline: string | null
+  commercial_register: string | null
   default_currency_id: number
   default_currency: string
   default_vat_rate_id: number

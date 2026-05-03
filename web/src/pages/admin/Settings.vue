@@ -46,6 +46,7 @@ async function saveSupplier() {
       phone: supplier.value.phone,
       web: supplier.value.web,
       tagline: supplier.value.tagline,
+      commercial_register: supplier.value.commercial_register,
       default_payment_due_days: supplier.value.default_payment_due_days,
       default_hourly_rate: supplier.value.default_hourly_rate,
       pohoda_account_code: supplier.value.pohoda_account_code,
@@ -175,6 +176,13 @@ async function removeCurrency(c: CurrencyAccount) {
           <div class="md:col-span-2">
             <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('settings.tagline') }}</label>
             <input v-model="supplier.tagline" type="text" class="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('settings.commercial_register') }}</label>
+            <input v-model="supplier.commercial_register" type="text"
+              :placeholder="t('settings.commercial_register_placeholder')"
+              class="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm" />
+            <p class="text-xs text-neutral-500 mt-1">{{ t('settings.commercial_register_hint') }}</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('settings.default_due') }}</label>

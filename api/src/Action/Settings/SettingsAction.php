@@ -173,7 +173,7 @@ final class SettingsAction
 
         $allowed = [
             'company_name', 'display_name', 'street', 'city', 'zip', 'country_id',
-            'ic', 'dic', 'is_vat_payer', 'email', 'phone', 'web', 'tagline',
+            'ic', 'dic', 'is_vat_payer', 'email', 'phone', 'web', 'tagline', 'commercial_register',
             'default_currency_id', 'default_vat_rate_id', 'default_payment_due_days',
             'default_hourly_rate', 'logo_path', 'signature_path',
             'pohoda_account_code', 'pohoda_centre_code', 'pohoda_activity_code', 'pohoda_contract_code',
