@@ -20,6 +20,7 @@ samotného skriptu, takže jsou přenositelné mezi `C:\inetpub\wwwroot\…`,
 | `cron-backup.{cmd,sh}` | mysqldump celé DB do `private/backups/YYYY-MM-DD.sql.gz`, retention 30 dní |
 | `cron-bank-scan.{cmd,sh}` | Auto-import nových GPC výpisů z `private/bank-incoming/` + matching plateb na faktury |
 | `cron-send-reminders.{cmd,sh}` | Odeslání upomínkových e-mailů na faktury po splatnosti (`--days=N`, `--cooldown=N`, `--dry-run`) |
+| `cron-send-approval-reminders.{cmd,sh}` | Upomínky zákazníkům, kteří neschválili výkaz víceprací (`--days=N`, `--dry-run`) |
 
 ### Docker — vývoj v kontejnerech
 
@@ -43,6 +44,7 @@ samotného skriptu, takže jsou přenositelné mezi `C:\inetpub\wwwroot\…`,
 | `cron-backup` | 1× denně | 02:00 (před cleanupem) |
 | `cron-bank-scan` | každých 15–30 minut | `*/30 * * * *` |
 | `cron-send-reminders` | 1× denně (pracovní dny) | 09:00, Po–Pá |
+| `cron-send-approval-reminders` | 1× denně (pracovní dny) | 09:15, Po–Pá |
 
 Logy se ukládají do `log/cron/<nazev>-YYYY-MM-DD.log`. Stav úloh sleduj
 v admin/activity-log (každý cron sám zapíše záznam `cron.<nazev>`).
@@ -54,6 +56,7 @@ schtasks /create /tn "MyInvoice Cleanup"   /tr "C:\inetpub\wwwroot\myinvoice.cz\
 schtasks /create /tn "MyInvoice Backup"    /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-backup.cmd"         /sc daily /st 02:00 /ru SYSTEM
 schtasks /create /tn "MyInvoice BankScan"  /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-bank-scan.cmd"      /sc minute /mo 30 /ru SYSTEM
 schtasks /create /tn "MyInvoice Reminders" /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-send-reminders.cmd" /sc daily /st 09:00 /d MON,TUE,WED,THU,FRI /ru SYSTEM
+schtasks /create /tn "MyInvoice ApprovalReminders" /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-send-approval-reminders.cmd" /sc daily /st 09:15 /d MON,TUE,WED,THU,FRI /ru SYSTEM
 ```
 
 > ⚠️ PHP musí být v `PATH` účtu, pod kterým úloha běží (typicky `SYSTEM`
@@ -71,6 +74,7 @@ Edituj `crontab -e` (nebo `/etc/cron.d/myinvoice`):
   0  2  *   *   *    /var/www/myinvoice.cz/cmd/cron-backup.sh
 */30 *  *   *   *    /var/www/myinvoice.cz/cmd/cron-bank-scan.sh
   0  9  *   *   1-5  /var/www/myinvoice.cz/cmd/cron-send-reminders.sh
+ 15  9  *   *   1-5  /var/www/myinvoice.cz/cmd/cron-send-approval-reminders.sh
 ```
 
 `*.sh` skripty musí být spustitelné: `chmod +x cmd/*.sh`.
