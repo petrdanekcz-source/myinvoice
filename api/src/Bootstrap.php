@@ -45,6 +45,16 @@ final class Bootstrap
 
         date_default_timezone_set((string) $config->get('app.timezone', 'Europe/Prague'));
 
+        // PHP error log → log/php-errors.log (jinak by warnings/notices padaly do
+        // system php_errors.log, který je mimo repo). Display_errors v dev=on, prod=off.
+        $logDir = $rootDir . '/log';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        ini_set('log_errors', '1');
+        ini_set('error_log', $logDir . '/php-errors.log');
+        ini_set('display_errors', $env === 'development' ? '1' : '0');
+
         $builder = new ContainerBuilder();
         $builder->useAttributes(false);
         $builder->addDefinitions([

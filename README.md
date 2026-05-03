@@ -39,6 +39,8 @@ alternativa s důrazem na:
 - PDF se **snapshotem dodavatele/odběratele/banky** — vystavená faktura je neměnná
 - Editace vystavené faktury jen pro admina s `?force=1` + audit záznam
 
+![QR platba na PDF faktuře](manual/img/10_qr_platba.webp)
+
 ### 💳 Platby
 - **QR platby** přímo v PDF: SPAYD pro CZK, SEPA EPC pro EUR
 - **Import GPC** výpisů (ABO formát, KB / FIO / ČSOB / RB / ČS) s SHA256 dedupe
@@ -46,7 +48,7 @@ alternativa s důrazem na:
 - Manuální párování + označení transakce jako "ignorovat"
 - **Upomínky** po splatnosti — manuální tlačítko na detailu, hromadná akce, nebo cron
 
-![QR platba na PDF faktuře](manual/img/10_qr_platba.webp)
+![Schvalovací stránka pro zákazníka](manual/img/09_schvalit_vykaz_prace.webp)
 
 ### 👥 Klienti & zakázky
 - Klienti s **ARES** (IČ → adresa, název) a **VIES** (DIČ) lookupem

@@ -15,6 +15,10 @@ externí cloud, tvoje data jsou jen u tebe.
   označit jako zaplacené (N)
 - **Výkaz víceprací** — druhá strana PDF s rozpisem hodin, suma se přenese do
   položky faktury
+- **Schvalování výkazu zákazníkem** — volitelné per zakázka. Před vystavením
+  faktury pošleš zákazníkovi e-mail s odkazem na veřejnou stránku (chráněno
+  jednorázovým tokenem + CAPTCHA). Po schválení se faktura **automaticky vystaví
+  a odešle**. ![Schvalovací stránka](img/09_schvalit_vykaz_prace.webp)
 - **PDF s QR platbou** — SPAYD pro CZK, SEPA EPC pro EUR
 - **E-mail s PDF přílohou** přes vlastní SMTP, s DKIM podpisem
 - **Klienti** s lookupem v ARES (IČ → adresa, název, DIČ) a VIES (DIČ pro EU)
