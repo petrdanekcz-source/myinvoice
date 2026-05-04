@@ -144,6 +144,11 @@ final class PohodaXmlExporter
                 $this->el($dom, $hdr, self::NS_INV, 'inv:text', 'Faktura ' . ($invoice['varsymbol'] ?? ''));
             }
 
+            // Per-faktura číslo zakázky (z projektu) — přepíše se po reimportu zpět na project_number
+            if (!empty($invoice['project_number'])) {
+                $this->el($dom, $hdr, self::NS_INV, 'inv:numberOrder', (string) $invoice['project_number']);
+            }
+
             // Účet / středisko / činnost / zakázka (per-supplier)
             if (!empty($cfg['pohoda_account_code'])) {
                 $this->codeRef($dom, $hdr, 'inv:account', (string) $cfg['pohoda_account_code']);

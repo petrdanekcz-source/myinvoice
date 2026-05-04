@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-05-04
+
+### Added
+
+- **Importy vystavených faktur z Pohoda XML / ISDOC** — nový endpoint
+  `POST /api/admin/import` (admin/účetní). Podporuje single soubor `.xml`
+  nebo `.isdoc`, případně `.zip` s libovolným počtem těchto souborů uvnitř.
+  Per fakturu:
+  - **Supplier match** — IČ dodavatele ze souboru musí odpovídat aktuálnímu
+    `X-Supplier-Id` scope; jinak se soubor přeskočí.
+  - **Klient** — lookup po `(supplier_id, ic)`; pokud neexistuje, fakturační
+    adresa se preferenčně tahá z ARES (`AresClient::lookup`), fallback na
+    adresu z XML. Vznikne nový `clients` row.
+  - **Zakázka** — pokud má faktura `project_number` (ISDOC `OrderReference/ID`
+    nebo Pohoda `numberOrder`), najde nebo vytvoří zakázku s tím číslem.
+    Když chybí, ale klient má napříč importovaným balíkem >1 unikátních
+    e-mailů, vytvoří se per-(klient,e-mail) zakázka s názvem `{Firma} – {email}`.
+    Jinak `project_id = NULL`.
+  - **Stav** — pokud je `due_date` starší než 30 dní → `paid` (`paid_at` =
+    `tax_date` nebo `issue_date`); jinak `issued`. UI to popisuje uživateli
+    v info banneru na stránce.
+  - **Duplicity** — kontrola po `(supplier_id, varsymbol)`; existující
+    se přeskakují s důvodem v reportu.
+  - **Snapshoty** — čerstvé z aktuálních supplier/client/bank dat.
+- **Frontend stránka `Systém → Importy`** — drag & drop upload, žlutý
+  banner o povinnosti existujícího dodavatele, modrý banner o pravidle
+  30 dní, tabulka výsledků s odkazem na vytvořené faktury, badge
+  `paid` / `issued` a štítky `+ klient` / `+ zakázka`.
+- **Manuál** — nová kapitola 14 `13a_Importy.md`.
+- **i18n** — sekce `imports.*` (cs + en).
+
+### Changed
+
+- **Exporty zapisují číslo zakázky / smlouvy** — `PohodaXmlExporter` přidává
+  `<inv:numberOrder>{project_number}</inv:numberOrder>` do `invoiceHeader`,
+  `IsdocExporter` přidává `<OrderReference><ID>{project_number}</ID></OrderReference>`
+  a `<ContractReference><ID>{contract_number}</ID></ContractReference>` před
+  `AccountingSupplierParty`. Round-trip přes naše vlastní exporty teď
+  zachovává linkování na zakázku, a importy z jiných systémů, které tyto
+  reference vyplňují, se pokusí přiřadit fakturu k zakázce s odpovídajícím
+  číslem (existující najdou, jinak vytvoří).
+- **`InvoicePdfRenderer::render(forceRegenerate=true)`** — kromě cache PDF
+  obnoví i `supplier_snapshot` / `client_snapshot` / `bank_snapshot` v DB
+  z aktuálních live dat. Bez toho se změny v supplier/client tabulce
+  (např. toggle `is_vat_payer`) na `issued+` faktury nepropisovaly.
+- **PDF šablona faktury** — pro neplátce DPH se ve metadatech místo řádku
+  `DUZP` zobrazí `DPH: Není plátce DPH`, sumace skrývá `Základ X %` /
+  `DPH X %` / `Celkem bez DPH` / `DPH celkem` (zůstává jen `Celkem`).
+  Hlavičkový title bez „— daňový doklad" pro neplátce. Pro proformu
+  (i pro plátce DPH) totéž — title jen `Zálohová faktura`, bez DUZP, bez
+  rozpisu základů daně.
+
 ## [1.5.0] — 2026-05-05
 
 ### Added

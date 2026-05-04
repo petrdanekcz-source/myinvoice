@@ -4,7 +4,7 @@
     "dashboard": "Přehled", "invoices": "Faktury", "clients": "Klienti",
     "projects": "Zakázky", "bank": "Banka", "system": "Systém",
     "settings": "Nastavení", "supplier_current": "Dodavatel", "suppliers": "Dodavatelé", "codebooks": "Číselníky", "users": "Uživatelé",
-    "log": "Log", "exports": "Exporty", "email_templates": "Email šablony", "approvals": "Schvalování", "help": "Nápověda", "logout": "Odhlásit"
+    "log": "Log", "exports": "Exporty", "imports": "Importy", "email_templates": "Email šablony", "approvals": "Schvalování", "help": "Nápověda", "logout": "Odhlásit"
   },
   "auth": {
     "login": "Přihlásit", "login_title": "Přihlášení", "login_subtitle": "Přihlaste se ke svému účtu",
@@ -734,6 +734,35 @@
     "preparing": "Připravuji ZIP…",
     "hint": "PDF se před exportem aktualizuje, pokud cache není svěží. Větší archivy mohou trvat několik sekund.",
     "download_failed": "Stažení selhalo"
+  },
+  "imports": {
+    "title": "Importy",
+    "subtitle": "Načtení vystavených faktur z Pohoda XML nebo ISDOC do systému.",
+    "supplier_required_title": "Dodavatel musí už existovat",
+    "supplier_required_hint": "Faktury se naimportují pouze pokud IČ dodavatele v souboru odpovídá aktuálně zvolenému dodavateli v aplikaci. Soubor s jiným dodavatelem se přeskočí.",
+    "status_rule_title": "Stav importované faktury",
+    "status_rule_hint": "Pokud je datum splatnosti starší než 30 dní (předpokládáme, že je už zaplacená), faktura se uloží jako Zaplacená. Jinak jako Vystavená — platba se pak spáruje standardním flow přes bankovní výpis nebo ručně.",
+    "imported_as_paid": "uloženo jako zaplacené",
+    "imported_as_issued": "uloženo jako vystavené",
+    "drop_or_click": "Přetáhni soubory sem nebo klikni pro výběr",
+    "formats_hint": "Podporované formáty: .xml (Pohoda dataPack), .isdoc, nebo .zip s libovolným počtem .xml/.isdoc uvnitř.",
+    "selected_files": "Vybrané soubory",
+    "upload": "Importovat",
+    "uploading": "Importuji…",
+    "upload_failed": "Import selhal",
+    "hint": "Klienti se zakládají automaticky (preferenčně přes ARES podle IČ). Zakázka se vytvoří, pokud má faktura číslo zakázky nebo když je u klienta v importu více emailů. Duplicitní faktury (podle var. symbolu) se přeskakují.",
+    "summary_created": "vytvořeno",
+    "summary_skipped": "přeskočeno",
+    "summary_failed": "chyba",
+    "col_file": "Soubor",
+    "col_status": "Stav",
+    "col_varsymbol": "Var. symbol",
+    "col_detail": "Detail",
+    "status_created": "vytvořeno",
+    "status_skipped": "přeskočeno",
+    "status_failed": "chyba",
+    "new_client": "+ klient",
+    "new_project": "+ zakázka"
   },
   "setup": {
     "title": "Úvodní nastavení",

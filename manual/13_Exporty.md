@@ -82,7 +82,21 @@ Mapování v ISDOC:
 | SEPA převod (EU) | `31` |
 | Hotovost | `10` |
 
-### 13.3.4 Import do účetního software
+### 13.3.4 Číslo zakázky a smlouvy
+
+Pokud má faktura přiřazenou zakázku s vyplněným číslem zakázky / číslem
+smlouvy, exportují se do ISDOC jako:
+
+```xml
+<OrderReference><ID>2026-042</ID></OrderReference>          <!-- project_number -->
+<ContractReference><ID>SMLOUVA-001</ID></ContractReference> <!-- contract_number -->
+```
+
+Některé účetní softwary tyto reference zachovávají při importu (Money S3,
+Helios). MyInvoice je při [zpětném importu](13a_Importy.md) také čte —
+zakázka se podle `project_number` najde nebo automaticky vytvoří.
+
+### 13.3.5 Import do účetního software
 
 | Software | Kde naimportovat |
 |---|---|
@@ -128,7 +142,20 @@ Před prvním exportem do Pohody **musíš nastavit Pohoda kódy v dodavateli**:
 Bez vyplnění některého z těchto polí export proběhne, ale **import do Pohody
 hodí varování** — musíš v Pohodě dovyplnit při importu.
 
-### 13.4.3 VAT klasifikace
+### 13.4.3 Číslo zakázky
+
+Pokud má faktura zakázku s vyplněným číslem, exportuje se do hlavičky:
+
+```xml
+<inv:numberOrder>2026-042</inv:numberOrder>
+```
+
+Pohoda toto pole standardně načítá jako „Číslo zakázky" / „Číslo objednávky".
+Pro per-supplier `pohoda_contract_code` (v Nastavení → Dodavatel → Pohoda)
+nadále platí samostatný `<inv:contract>` blok — ten se zapisuje pro celou
+číselnou řadu, `<inv:numberOrder>` per faktura.
+
+### 13.4.4 VAT klasifikace
 
 MyInvoice mapuje DPH sazby na **Pohoda kódy klasifikace**:
 
@@ -139,14 +166,14 @@ MyInvoice mapuje DPH sazby na **Pohoda kódy klasifikace**:
 | 0 % osvobozeno | `UNX` (osvobozeno) |
 | 0 % reverse charge | `PNAR` (přenesená daňová povinnost) |
 
-### 13.4.4 Import do Pohody
+### 13.4.5 Import do Pohody
 
 1. Pohoda → **Soubor → Datová komunikace → XML import / export**
 2. **Import** → vyber `myinvoice-pohoda-2026-04.xml`
 3. Pohoda zobrazí náhled (kolik faktur, jaké částky)
 4. Klik **Importovat** → faktury se založí
 
-### 13.4.5 Co Pohoda XML neobsahuje
+### 13.4.6 Co Pohoda XML neobsahuje
 
 - **PDF přílohu faktury** (Pohoda generuje vlastní PDF z dat)
 - **Výkaz víceprací** (přílohy se neexportují)

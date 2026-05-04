@@ -126,6 +126,18 @@ final class IsdocExporter
         $this->el($dom, $root, 'CurrRate', number_format($rate, 6, '.', ''));
         $this->el($dom, $root, 'RefCurrRate', '1');
 
+        // Číslo zakázky / smlouvy (z projektu) — IsdocParser je čte při zpětném importu.
+        if (!empty($invoice['project_number'])) {
+            $orderRef = $dom->createElementNS(self::NS, 'OrderReference');
+            $this->el($dom, $orderRef, 'ID', (string) $invoice['project_number']);
+            $root->appendChild($orderRef);
+        }
+        if (!empty($invoice['contract_number'])) {
+            $contractRef = $dom->createElementNS(self::NS, 'ContractReference');
+            $this->el($dom, $contractRef, 'ID', (string) $invoice['contract_number']);
+            $root->appendChild($contractRef);
+        }
+
         // Supplier (snapshot first, then live)
         $supplier = $this->resolveSupplier($invoice);
         $supParty = $dom->createElementNS(self::NS, 'AccountingSupplierParty');

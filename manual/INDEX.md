@@ -1,6 +1,6 @@
 # MyInvoice.cz — uživatelský manuál
 
-> Verze: 1.4 · Datum: 2026-05-05 · Vyvíjí [MyWebdesign.cz s.r.o.](https://mywebdesign.cz/)
+> Verze: 1.6 · Datum: 2026-05-04 · Vyvíjí [MyWebdesign.cz s.r.o.](https://mywebdesign.cz/)
 
 Vítej v manuálu k fakturačnímu systému **MyInvoice.cz**. Manuál pokrývá vše, co
 v aplikaci uděláš — od prvního přihlášení, přes vystavení faktury a její
@@ -39,6 +39,7 @@ nasazuje). Zbytek je psaný pro běžného uživatele — bez programátorského
 ### Exporty pro účetní
 
 13. [Exporty (PDF ZIP, ISDOC, Pohoda XML)](13_Exporty.md)
+14. [Importy (Pohoda XML, ISDOC)](13a_Importy.md)
 
 ### Konfigurace
 

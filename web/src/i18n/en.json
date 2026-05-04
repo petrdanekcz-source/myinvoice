@@ -4,7 +4,7 @@
     "dashboard": "Dashboard", "invoices": "Invoices", "clients": "Clients",
     "projects": "Projects", "bank": "Bank", "system": "System",
     "settings": "Settings", "supplier_current": "Supplier", "suppliers": "Suppliers", "codebooks": "Codebooks", "users": "Users",
-    "log": "Activity log", "exports": "Exports", "email_templates": "Email templates", "approvals": "Approvals", "help": "Help", "logout": "Sign out"
+    "log": "Activity log", "exports": "Exports", "imports": "Imports", "email_templates": "Email templates", "approvals": "Approvals", "help": "Help", "logout": "Sign out"
   },
   "auth": {
     "login": "Sign in", "login_title": "Sign in", "login_subtitle": "Sign in to your account",
@@ -734,6 +734,35 @@
     "preparing": "Preparing ZIP…",
     "hint": "PDFs are refreshed before export if the cache is stale. Larger archives may take a few seconds.",
     "download_failed": "Download failed"
+  },
+  "imports": {
+    "title": "Imports",
+    "subtitle": "Load issued invoices from Pohoda XML or ISDOC into the system.",
+    "supplier_required_title": "Supplier must already exist",
+    "supplier_required_hint": "Invoices are imported only when the supplier reg. no. (IČ) in the file matches the supplier currently selected in the app. Files for a different supplier are skipped.",
+    "status_rule_title": "Status of imported invoice",
+    "status_rule_hint": "If the due date is more than 30 days old (we assume it's already paid), the invoice is stored as Paid. Otherwise as Issued — payment is then matched via the standard bank-statement flow or manually.",
+    "imported_as_paid": "stored as paid",
+    "imported_as_issued": "stored as issued",
+    "drop_or_click": "Drop files here or click to choose",
+    "formats_hint": "Supported formats: .xml (Pohoda dataPack), .isdoc, or .zip bundling any number of .xml/.isdoc.",
+    "selected_files": "Selected files",
+    "upload": "Import",
+    "uploading": "Importing…",
+    "upload_failed": "Import failed",
+    "hint": "Clients are created automatically (preferring ARES lookup by Czech reg. no.). A project is created when the invoice has a project number or when the client has multiple emails across the batch. Duplicate invoices (by variable symbol) are skipped.",
+    "summary_created": "created",
+    "summary_skipped": "skipped",
+    "summary_failed": "failed",
+    "col_file": "File",
+    "col_status": "Status",
+    "col_varsymbol": "Var. symbol",
+    "col_detail": "Detail",
+    "status_created": "created",
+    "status_skipped": "skipped",
+    "status_failed": "failed",
+    "new_client": "+ client",
+    "new_project": "+ project"
   },
   "setup": {
     "title": "Initial setup",
