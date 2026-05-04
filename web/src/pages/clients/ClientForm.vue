@@ -28,6 +28,7 @@ const form = ref<ClientPayload>({
   reverse_charge: false,
   auto_send_reminders: true,
   payment_due_default: 7,
+  hourly_rate: 0,
   note: null,
 })
 
@@ -72,6 +73,7 @@ function sanitize(c: Client): Partial<ClientPayload> {
     reverse_charge: c.reverse_charge,
     auto_send_reminders: c.auto_send_reminders ?? true,
     payment_due_default: c.payment_due_default ?? null,
+    hourly_rate: c.hourly_rate ?? 0,
     note: c.note ?? null,
   }
 }
@@ -241,20 +243,13 @@ async function submit() {
           </div>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('client.language') }}</label>
             <select v-model="form.language"
               class="w-full h-10 px-3 border border-neutral-300 rounded-md bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none">
               <option value="cs">Čeština</option>
               <option value="en">English</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('client.currency_default') }}</label>
-            <select v-model.number="form.currency_default_id"
-              class="w-full h-10 px-3 border border-neutral-300 rounded-md bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none">
-              <option v-for="c in currencies" :key="c.id" :value="c.id">{{ c.label }}</option>
             </select>
           </div>
           <div>
@@ -267,6 +262,23 @@ async function submit() {
               <input v-model="form.reverse_charge" type="checkbox" class="rounded border-neutral-300 text-primary-600" />
               <span>{{ t('client.reverse_charge') }}</span>
             </label>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('client.currency_default') }}</label>
+            <select v-model.number="form.currency_default_id"
+              class="w-full h-10 px-3 border border-neutral-300 rounded-md bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none">
+              <option v-for="c in currencies" :key="c.id" :value="c.id">{{ c.label }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('client.hourly_rate') }}</label>
+            <input autocomplete="off" v-model.number="form.hourly_rate" type="number" step="0.01" min="0" placeholder="0"
+              class="w-full h-10 px-3 border border-neutral-300 rounded-md font-mono focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none" />
+            <p class="text-xs text-neutral-500 mt-1">{{ t('client.hourly_rate_hint') }}</p>
+            <p v-if="errors.hourly_rate" class="text-xs text-danger-500 mt-1">{{ errors.hourly_rate[0] }}</p>
           </div>
         </div>
 

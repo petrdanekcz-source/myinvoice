@@ -409,6 +409,8 @@
     "currency_default": "Výchozí měna",
     "reverse_charge": "Reverse charge",
     "payment_due_default": "Výchozí splatnost (dnů)",
+    "hourly_rate": "Hodinová sazba",
+    "hourly_rate_hint": "Použije se v editoru faktury, pokud není vybraná zakázka. 0 = nepoužívat.",
     "auto_send_reminders": "Posílat automatické upomínky",
     "auto_send_reminders_hint": "Když je vypnuto, cron nebude posílat automatické upomínky pro tohoto klienta. Ruční odeslání (jednotlivé i hromadné) funguje vždy.",
     "note": "Poznámka",

@@ -67,7 +67,8 @@ final class ClientRepository
         // Cache `client_revenue_cache` — primární řádek vybíráme přes c.currency_default_id
         $sql = "SELECT c.id, c.supplier_id, c.company_name, c.ic, c.dic, c.main_email, c.language,
                        c.currency_default_id, cur.code AS currency_default,
-                       c.reverse_charge, c.archived_at, co.iso2 AS country_iso2,
+                       c.reverse_charge, c.payment_due_default, c.hourly_rate,
+                       c.archived_at, co.iso2 AS country_iso2,
                        (SELECT COUNT(*) FROM projects p WHERE p.client_id = c.id AND p.status = 'active' AND p.archived_at IS NULL) AS active_projects_count,
                        COALESCE(crc.revenue, 0) AS revenue,
                        crc.last_invoice_date,
@@ -108,8 +109,8 @@ final class ClientRepository
         $sql = 'INSERT INTO clients
             (supplier_id, company_name, first_name, last_name, ic, dic, street, city, zip, country_id,
              main_email, phone, language, currency_default_id, reverse_charge, auto_send_reminders,
-             payment_due_default, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+             payment_due_default, hourly_rate, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $stmt = $this->db->pdo()->prepare($sql);
         $stmt->execute([
             $supplierId,
@@ -129,6 +130,7 @@ final class ClientRepository
             !empty($data['reverse_charge']) ? 1 : 0,
             array_key_exists('auto_send_reminders', $data) ? ((int) (bool) $data['auto_send_reminders']) : 1,
             isset($data['payment_due_default']) ? (int) $data['payment_due_default'] : null,
+            (float) ($data['hourly_rate'] ?? 0),
             $this->nullable($data, 'note'),
         ]);
         return (int) $this->db->pdo()->lastInsertId();
@@ -147,7 +149,8 @@ final class ClientRepository
                 company_name = ?, first_name = ?, last_name = ?, ic = ?, dic = ?,
                 street = ?, city = ?, zip = ?, country_id = ?,
                 main_email = ?, phone = ?, language = ?, currency_default_id = ?,
-                reverse_charge = ?, auto_send_reminders = ?, payment_due_default = ?, note = ?
+                reverse_charge = ?, auto_send_reminders = ?, payment_due_default = ?,
+                hourly_rate = ?, note = ?
                 WHERE id = ?';
         $stmt = $this->db->pdo()->prepare($sql);
         $stmt->execute([
@@ -167,6 +170,7 @@ final class ClientRepository
             !empty($data['reverse_charge']) ? 1 : 0,
             array_key_exists('auto_send_reminders', $data) ? ((int) (bool) $data['auto_send_reminders']) : 1,
             isset($data['payment_due_default']) ? (int) $data['payment_due_default'] : null,
+            (float) ($data['hourly_rate'] ?? 0),
             $this->nullable($data, 'note'),
             $id,
         ]);
@@ -252,6 +256,9 @@ final class ClientRepository
         }
         if (isset($row['payment_due_default'])) {
             $row['payment_due_default'] = $row['payment_due_default'] !== null ? (int) $row['payment_due_default'] : null;
+        }
+        if (array_key_exists('hourly_rate', $row)) {
+            $row['hourly_rate'] = (float) $row['hourly_rate'];
         }
         if (array_key_exists('revenue', $row))           $row['revenue'] = (float) $row['revenue'];
         if (array_key_exists('last_invoice_date', $row)) $row['last_invoice_date'] = $row['last_invoice_date'] ?: null;

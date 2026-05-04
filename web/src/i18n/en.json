@@ -409,6 +409,8 @@
     "currency_default": "Default currency",
     "reverse_charge": "Reverse charge",
     "payment_due_default": "Default due (days)",
+    "hourly_rate": "Hourly rate",
+    "hourly_rate_hint": "Used as fallback in the invoice editor when no project is selected. 0 = not used.",
     "auto_send_reminders": "Send automatic reminders",
     "auto_send_reminders_hint": "When off, the cron will not send automatic reminders for this client. Manual send (single + bulk) always works.",
     "note": "Note",

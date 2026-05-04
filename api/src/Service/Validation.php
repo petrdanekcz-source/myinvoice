@@ -45,6 +45,9 @@ final class Validation
         if ($curId !== null && (!is_numeric($curId) || (int) $curId <= 0)) {
             $err['currency_default_id'][] = 'Neplatné currency_default_id';
         }
+        if (isset($data['hourly_rate']) && (float) $data['hourly_rate'] < 0) {
+            $err['hourly_rate'][] = 'Hodinová sazba nesmí být záporná';
+        }
         return $err;
     }
 

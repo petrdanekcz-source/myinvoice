@@ -94,11 +94,17 @@ function vatRateLabel(r: VatRate): string {
 function blankItem(): InvoiceItem {
   // Dobropis = záporné množství (sleva/refundace), default -1
   const qty = form.value.invoice_type === 'credit_note' ? -1 : 1
+  const projectRate = projects.value.find(p => p.id === form.value.project_id)?.hourly_rate
+  const clientRate = clients.value.find(c => c.id === form.value.client_id)?.hourly_rate
+  // Project sazba má přednost; client.hourly_rate je fallback pro faktury bez zakázky.
+  const rate = (projectRate && projectRate > 0) ? projectRate
+    : (clientRate && clientRate > 0) ? clientRate
+    : 0
   return {
     description: '',
     quantity: qty,
     unit: 'h',
-    unit_price_without_vat: 0,
+    unit_price_without_vat: rate,
     vat_rate_id: defaultVatRateId(),
     order_index: form.value.items.length,
   }
@@ -217,6 +223,12 @@ async function applyClientDefaults(clientId: number) {
   form.value.reverse_charge = c.reverse_charge
   if (c.payment_due_default) {
     form.value.due_date = addDays(form.value.issue_date, c.payment_due_default)
+  }
+  // Klientská sazba — fallback pro faktury bez zakázky (project rate přepíše později).
+  if (!form.value.project_id && c.hourly_rate && c.hourly_rate > 0
+      && form.value.items.length === 1 && form.value.items[0].unit_price_without_vat === 0) {
+    form.value.items[0].unit_price_without_vat = c.hourly_rate
+    form.value.items[0].unit = 'h'
   }
 }
 
@@ -354,10 +366,12 @@ const wrTotalHours = computed(() => wrItemsValid.value.reduce((s, i) => s + (Num
 const wrTotalAmount = computed(() => wrItemsValid.value.reduce((s, i) => s + (Number(i.hours) || 0) * (Number(i.rate) || 0), 0))
 
 function addWrItem() {
-  // 1. project hourly rate, 2. existing WR row rate (z editace), 3. default 1500
+  // 1. project hourly rate, 2. client hourly rate, 3. existing WR row rate, 4. default 1500
   const projectRate = projects.value.find(p => p.id === form.value.project_id)?.hourly_rate
+  const clientRate = clients.value.find(c => c.id === form.value.client_id)?.hourly_rate
   const previousRate = wrItems.value[wrItems.value.length - 1]?.rate
   const defaultRate = (projectRate && projectRate > 0) ? projectRate
+    : (clientRate && clientRate > 0) ? clientRate
     : (previousRate && previousRate > 0) ? previousRate
     : 1500
   wrItems.value.push({ description: '', hours: 1, rate: defaultRate, order_index: wrItems.value.length })

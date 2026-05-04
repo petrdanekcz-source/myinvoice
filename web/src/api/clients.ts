@@ -19,6 +19,7 @@ export interface Client {
   reverse_charge: boolean
   auto_send_reminders: boolean
   payment_due_default?: number | null
+  hourly_rate: number
   note?: string | null
   archived_at?: string | null
   active_projects_count?: number
@@ -93,6 +94,7 @@ export interface ClientPayload {
   reverse_charge: boolean
   auto_send_reminders: boolean
   payment_due_default?: number | null
+  hourly_rate?: number
   note?: string | null
 }
 
