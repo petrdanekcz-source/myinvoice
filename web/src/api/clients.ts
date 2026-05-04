@@ -64,7 +64,7 @@ export interface AresLookupResult {
 
 export interface ViesLookupResult {
   valid: boolean
-  source: 'cache' | 'rest' | 'soap' | 'error'
+  source: 'cache' | 'rest' | 'soap' | 'ares' | 'error'
   name?: string
   address?: string
   parsed?: {

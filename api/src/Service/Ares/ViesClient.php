@@ -16,6 +16,11 @@ use Psr\Log\LoggerInterface;
  * Endpoint: GET /ms/{COUNTRY}/vat/{NUMBER_BEZ_PREFIXU}
  * SOAP fallback: pokud REST vrátí 5xx nebo timeout.
  * Cache: vies_cache 24h
+ *
+ * Pro CZ DIČ se primárně používá ARES — autoritativní český registr.
+ * VIES pro CZ data čerpá odtud s delay a při výpadcích vrací false-negative
+ * (isValid:false + name/address vyplněné placeholderem "---" z viesApproximate),
+ * což se zacachuje a uživateli pak svítí nepravdivé "DIČ není platné".
  */
 final class ViesClient
 {
@@ -23,10 +28,11 @@ final class ViesClient
         private readonly Config $config,
         private readonly Connection $db,
         private readonly LoggerInterface $logger,
+        private readonly AresClient $ares,
     ) {}
 
     /**
-     * @return array{valid:bool, name?:string, address?:string, country?:string, vat_number?:string, source:'cache'|'rest'|'soap'|'error'}
+     * @return array{valid:bool, name?:string, address?:string, country?:string, vat_number?:string, source:'cache'|'rest'|'soap'|'ares'|'error'}
      */
     public function lookup(string $vatId): array
     {
@@ -41,6 +47,16 @@ final class ViesClient
         if ($cached !== null) {
             $cached['source'] = 'cache';
             return $cached;
+        }
+
+        // CZ → ARES (přesnější + spolehlivější než VIES pro tuzemce)
+        if ($country === 'CZ') {
+            $aresResult = $this->tryAres($number, $vatId);
+            if ($aresResult !== null) {
+                $this->cache($vatId, $aresResult);
+                return $aresResult;
+            }
+            // ARES nedostupné → spadneme na VIES jako fallback
         }
 
         // Try REST first
@@ -58,6 +74,51 @@ final class ViesClient
         }
 
         return ['valid' => false, 'source' => 'error'];
+    }
+
+    /**
+     * CZ-only verifikace přes ARES. Subjekt je "platný plátce DPH" iff
+     * `seznamRegistraci.stavZdrojeDph === 'AKTIVNI'` (mapováno do `is_vat_payer`).
+     *
+     * @return array{valid:bool, name:string, address:string, parsed:?array, country:string, vat_number:string, source:'ares'}|null
+     */
+    private function tryAres(string $ico, string $vatId): ?array
+    {
+        $r = $this->ares->lookup($ico);
+        if ($r === null) {
+            return null; // ARES nedostupný → fallback na VIES
+        }
+        if (!($r['found'] ?? false)) {
+            return [
+                'valid'      => false,
+                'name'       => '',
+                'address'    => '',
+                'parsed'     => null,
+                'country'    => 'CZ',
+                'vat_number' => $vatId,
+                'source'     => 'ares',
+            ];
+        }
+        $data   = $r['data'] ?? [];
+        $valid  = (bool) ($data['is_vat_payer'] ?? false);
+        $street = (string) ($data['street'] ?? '');
+        $zip    = (string) ($data['zip'] ?? '');
+        $city   = (string) ($data['city'] ?? '');
+        $address = trim($street . "\n" . trim($zip . ' ' . $city));
+
+        return [
+            'valid'      => $valid,
+            'name'       => (string) ($data['company_name'] ?? ''),
+            'address'    => $address,
+            'parsed'     => ($street !== '' || $city !== '') ? [
+                'street' => $street,
+                'city'   => $city,
+                'zip'    => $zip,
+            ] : null,
+            'country'    => 'CZ',
+            'vat_number' => $vatId,
+            'source'     => 'ares',
+        ];
     }
 
     private function tryRest(string $country, string $number, string $vatId): ?array
