@@ -28,7 +28,7 @@ if (!class_exists(ZipArchive::class)) {
     exit(1);
 }
 
-$date = date('Y-m-d');
+$date = date('Y-m-d_H-i');
 $file = "$backupDir/$dbName-pdf-$date.zip";
 
 $sources = [
@@ -99,7 +99,7 @@ $prefix = $dbName . '-pdf-';
 $files = glob($backupDir . '/' . $prefix . '*.zip') ?: [];
 $now = time();
 foreach ($files as $f) {
-    if (!preg_match('/-(\d{4}-\d{2}-\d{2})\.zip$/', $f, $m)) continue;
+    if (!preg_match('/-(\d{4}-\d{2}-\d{2})(?:_\d{2}-\d{2})?\.zip$/', $f, $m)) continue;
     $age = $now - strtotime($m[1]);
     $isMonthly = str_ends_with($m[1], '-01');
     $maxAge = $isMonthly ? 365 * 86400 : 30 * 86400;
