@@ -52,6 +52,24 @@ takže další compose příkazy vyžadují flag `-f docker-compose.production.y
 > `cmd/docker-update.{sh,ps1}` (auto-detekuje registry mode = `pull` + `up -d`
 > + migrace).
 
+**Aktualizace na novou verzi:**
+
+```bash
+# Linux / macOS
+cmd/docker-update.sh
+
+# Windows PowerShell
+.\cmd\docker-update.ps1
+```
+
+Skript v registry módu sám zavolá `docker compose pull app` (stáhne nový
+image z GHCR), restartuje stack a doběhne pending migrace. Volumes (DB data)
+zůstávají zachovány. Mód detekuje automaticky — pokud nemáš `.git/`
+nebo `build:` blok v compose, jede přes `pull`.
+
+Nový image se publikuje automaticky při každém release tagu `v*.*.*`,
+takže aktualizace je otázkou jednoho příkazu.
+
 ### 2.1.2 Varianta B — build z source
 
 Postaví image lokálně z repa — vhodné pro vývoj a vlastní úpravy.

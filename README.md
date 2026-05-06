@@ -144,6 +144,21 @@ Skript automaticky:
 Používá `docker-compose.production.yml`, takže další compose příkazy vyžadují
 flag `-f docker-compose.production.yml` (logs, pull, down…).
 
+**Aktualizace na novou verzi** — stačí jeden příkaz:
+
+```bash
+# Linux / macOS
+cmd/docker-update.sh
+
+# Windows PowerShell
+.\cmd\docker-update.ps1
+```
+
+Skript v registry módu sám zavolá `docker compose pull app` (stáhne nový image
+z GHCR), restartuje stack a doběhne pending migrace. Volumes (DB data) zůstávají
+zachovány. Nový image se publikuje automaticky při každém release tagu
+`v*.*.*`.
+
 ### Varianta B — build z source (pro vývoj)
 
 S klonem repa máš přístup k celému kódu, můžeš upravovat a build si vyrobí
