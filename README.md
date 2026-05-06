@@ -114,11 +114,60 @@ Nejrychlejší cesta k běžící aplikaci. Stačí mít nainstalovaný **Docker
 (Windows / macOS) nebo **Docker Engine + compose-plugin** (Linux) — nepotřebuješ
 lokálně PHP, MariaDB, Node ani nic dalšího.
 
-### Varianta A — pre-built image z GHCR (bez klonování repa)
+### Varianta A — one-click z GHCR ⭐ (nejsnazší)
 
-Pro produkční nasazení tam, kde nechceš klonovat celý repo. Image `ghcr.io/radekhulan/myinvoice`
-je multi-arch (`linux/amd64` + `linux/arm64`) — funguje na běžném Linux serveru
-i na M1/M2 Macu nebo Raspberry Pi 4/5.
+Naklonuj repo a spusť jeden příkaz. Stáhne pre-built multi-arch image
+(`ghcr.io/radekhulan/myinvoice:latest`, `linux/amd64` + `linux/arm64`),
+vygeneruje hesla a configy, spustí stack a migrace. Nepotřebuješ na hostu
+`pnpm`/`composer` ani několikaminutový build.
+
+```bash
+git clone https://github.com/radekhulan/myinvoice.git
+cd myinvoice
+
+# Linux / macOS
+cmd/docker-ghcr.sh
+
+# Windows PowerShell
+.\cmd\docker-ghcr.ps1
+```
+
+Skript automaticky:
+
+1. Vygeneruje `.env` s náhodnými DB hesly (28 znaků base64)
+2. Vygeneruje `cfg.docker.php` z `cfg.sample.php` (host=db / redis, randomized
+   `app.pepper` + `secret_encryption_key`, dev-friendly cookies pro HTTP loopback)
+3. `docker compose pull` — stáhne image z GHCR
+4. Spustí stack: **app** (Apache:80→host:8080) + **db** (MariaDB 11)
+5. Počká, až bude DB healthy, a spustí migrace
+
+Používá `docker-compose.production.yml`, takže další compose příkazy vyžadují
+flag `-f docker-compose.production.yml` (logs, pull, down…).
+
+### Varianta B — build z source (pro vývoj)
+
+S klonem repa máš přístup k celému kódu, můžeš upravovat a build si vyrobí
+lokálně místo stahování z GHCR:
+
+```bash
+git clone https://github.com/radekhulan/myinvoice.git
+cd myinvoice
+
+# Linux / macOS
+cmd/docker-install.sh
+
+# Windows PowerShell
+.\cmd\docker-install.ps1
+```
+
+Stejné kroky jako Varianta A, jen místo `pull` z GHCR postaví `myinvoice:latest`
+image lokálně (multi-stage: Vue build → composer → PHP 8.5 + Apache). Pomalejší,
+ale zachytí tvoje rozpracované úpravy v repu.
+
+### Varianta C — bez klonování repa (jen Docker, manuálně)
+
+Pro produkční Linux server, kde nechceš mít ani klon repa. Stáhneš jen dva
+soubory přes `curl` a sestavíš konfiguraci ručně:
 
 ```bash
 mkdir myinvoice && cd myinvoice
@@ -139,53 +188,18 @@ docker compose up -d
 docker compose exec app php api/bin/migrate.php
 ```
 
-Otevři **http://localhost:8080** → setup wizard.
+> ⚠️ Tato varianta hesla a secrets do `cfg.docker.php` automaticky nedoplní —
+> musíš je tam zapsat ručně (viz komentář v ukázce). Pro one-click použij
+> **Variantu A**.
 
-> 💡 V produkci pinuj konkrétní verzi — v `docker-compose.yml` změň `:latest`
-> na `:1.2.0`. Update pak: bumpni tag, `docker compose pull && up -d`, spusť `migrate.php`.
+> 💡 V produkci pinuj konkrétní verzi — v `docker-compose.yml` (resp.
+> `docker-compose.production.yml`) změň `:latest` na konkrétní tag, např.
+> `:1.7.0`. Update pak `cmd/docker-update.{sh,ps1}` (auto-detekuje registry
+> mode = `pull` + `up -d` + migrace).
 
-> 💡 **Pokud už máš repo naklonované**, místo manuálního flow výše stačí jeden
-> příkaz — `cmd/docker-ghcr.{sh,ps1}` udělá totéž (random `.env`, `cfg.docker.php`
-> z `cfg.sample.php`, `docker compose pull`, `up -d`, migrace) přes
-> `docker-compose.production.yml`:
->
-> ```bash
-> # Linux / macOS
-> cmd/docker-ghcr.sh
->
-> # Windows PowerShell
-> .\cmd\docker-ghcr.ps1
-> ```
->
-> Další compose příkazy pak vyžadují `-f docker-compose.production.yml`
-> (logs, pull, down…).
+### Po dokončení (všechny varianty)
 
-### Varianta B — build z source (pro vývoj)
-
-S klonem repa máš přístup k celému kódu, můžeš upravovat a build si vyrobí lokálně.
-Použij stejný flow s automatickým install scriptem:
-
-```bash
-git clone https://github.com/radekhulan/myinvoice.git
-cd myinvoice
-
-# Linux / macOS
-cmd/docker-install.sh
-
-# Windows PowerShell
-.\cmd\docker-install.ps1
-```
-
-Skript automaticky:
-
-1. Vygeneruje `.env` s náhodnými DB hesly (28 znaků base64)
-2. Vygeneruje `cfg.docker.php` z `cfg.sample.php` (host=db / redis, randomized
-   `app.pepper` + `secret_encryption_key`, dev-friendly cookies pro HTTP loopback)
-3. Postaví `myinvoice:latest` image (multi-stage: Vue build → composer → PHP 8.5 + Apache)
-4. Spustí stack: **app** (Apache:80→host:8080) + **db** (MariaDB 11)
-5. Počká, až bude DB healthy, a spustí migrace
-
-**Po dokončení otevři: 👉 [http://localhost:8080](http://localhost:8080)**
+**Otevři: 👉 [http://localhost:8080](http://localhost:8080)**
 
 V prohlížeči naskočí **setup wizard** (3 kroky):
 
