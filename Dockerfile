@@ -9,7 +9,7 @@
 # Daily:    docker compose up -d / down
 
 # ---------- Stage 1: frontend ----------
-FROM node:22-alpine AS web-build
+FROM node:24-alpine AS web-build
 WORKDIR /app
 COPY web/package.json web/pnpm-lock.yaml ./
 RUN corepack enable && corepack prepare pnpm@latest --activate \
