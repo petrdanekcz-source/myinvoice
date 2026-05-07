@@ -5,9 +5,12 @@
 #   2. Restarts the stack
 #   3. Waits for DB health and runs pending migrations
 #
-# Detects mode automatically:
-#   - If `.git/` exists AND docker-compose.yml has a `build:` block → source build
-#   - Otherwise → pulls pre-built image from GHCR
+# Detects mode automatically — preferuje aktuálně RUNNING stack:
+#   1. Pokud běží stack z `docker-compose.production.yml` → registry mode
+#      (GHCR pull, dál používá `-f docker-compose.production.yml`).
+#   2. Pokud běží stack z `docker-compose.yml` a je `.git/` + `build:` blok
+#      → source mode (git pull + local build).
+#   3. Fallback bez běžícího stacku — podle existujících souborů.
 #
 # Idempotent — safe to re-run. Volumes (DB data) persist; backup is your responsibility.
 set -euo pipefail
@@ -27,12 +30,30 @@ fi
 
 set -a; . ./.env; set +a
 
-# Detect mode: source build vs pre-built image from registry
+# Detect mode: registry vs source build.
+# Priorita 1 — který compose file má aktuálně RUNNING stack (autoritativní):
+#   - docker-compose.production.yml běží → registry mode (GHCR pull)
+#   - docker-compose.yml běží → source mode (local build z .git)
+# Priorita 2 — pokud nic neběží, fallback podle existujících souborů:
+#   - jen docker-compose.production.yml → registry
+#   - jinak → source (default)
+COMPOSE_ARGS=""
 MODE="registry"
-if [[ -d .git ]] && grep -qE '^\s*build:' docker-compose.yml 2>/dev/null; then
+if docker compose -f docker-compose.production.yml ps --format json app 2>/dev/null | grep -q '"State":"running"'; then
+  COMPOSE_ARGS="-f docker-compose.production.yml"
+  MODE="registry"
+elif docker compose ps --format json app 2>/dev/null | grep -q '"State":"running"' && [[ -d .git ]] && grep -qE '^\s*build:' docker-compose.yml 2>/dev/null; then
+  MODE="source"
+elif [[ -f docker-compose.production.yml ]] && [[ ! -d .git ]]; then
+  COMPOSE_ARGS="-f docker-compose.production.yml"
+  MODE="registry"
+elif [[ -d .git ]] && grep -qE '^\s*build:' docker-compose.yml 2>/dev/null; then
   MODE="source"
 fi
-echo "==> Mode: ${MODE}"
+echo "==> Mode: ${MODE}${COMPOSE_ARGS:+ (compose: ${COMPOSE_ARGS#-f })}"
+
+DC=(docker compose)
+[[ -n "$COMPOSE_ARGS" ]] && DC+=($COMPOSE_ARGS)
 
 # --- 1. fetch new code/image ---------------------------------------------
 if [[ "${MODE}" == "source" ]]; then
@@ -44,30 +65,30 @@ if [[ "${MODE}" == "source" ]]; then
   echo "==> git pull"
   git pull --ff-only
   echo "==> Rebuilding app image…"
-  docker compose build --pull app
+  "${DC[@]}" build --pull app
 else
   echo "==> Pulling latest image from registry…"
-  docker compose pull app
+  "${DC[@]}" pull app
 fi
 
 # --- 2. restart -----------------------------------------------------------
 echo "==> Restarting stack…"
-docker compose up -d db app
+"${DC[@]}" up -d db app
 
 # --- 3. wait for DB + migrate --------------------------------------------
 echo "==> Waiting for database to become healthy…"
 for i in {1..30}; do
-  status=$(docker compose ps --format json db 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 | cut -d'"' -f4)
+  status=$("${DC[@]}" ps --format json db 2>/dev/null | grep -o '"Health":"[^"]*"' | head -1 | cut -d'"' -f4)
   if [[ "$status" == "healthy" ]]; then echo "    DB ready."; break; fi
   sleep 2
   if [[ $i -eq 30 ]]; then
-    echo "ERROR: DB failed to become healthy in 60s. Check 'docker compose logs db'." >&2
+    echo "ERROR: DB failed to become healthy in 60s. Check '${DC[*]} logs db'." >&2
     exit 1
   fi
 done
 
 echo "==> Running database migrations…"
-docker compose exec -T app php api/bin/migrate.php
+"${DC[@]}" exec -T app php api/bin/migrate.php
 
 # --- 4. report -----------------------------------------------------------
 APP_PORT="${APP_PORT:-8080}"
