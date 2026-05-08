@@ -16,6 +16,9 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}   # = radekhulan/myinvoice
+  # Force JavaScript actions (checkout, setup-node, docker/*, …) na Node 24.
+  # Default je Node 20 (deprecated, removal září 2026).
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 # Strategie multi-arch buildu:
 #   1) `build` job běží matrixově per platforma na native runneru (amd64 = ubuntu-latest,

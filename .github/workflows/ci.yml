@@ -7,6 +7,11 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# Force JavaScript actions (checkout, setup-node, cache, …) na Node 24.
+# Default je Node 20 (deprecated, removal září 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   backend:
     name: Backend (PHP 8.5 + PHPUnit)
