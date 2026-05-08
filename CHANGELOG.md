@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] — 2026-05-08
+
+### Fixed
+
+- **`/admin/update` byla prázdná stránka po čerstvé instalaci** — vue-i18n
+  parser shodil celou aplikaci s `SyntaxError: 2` na řetězci
+  `cmd/docker-update-watcher.{sh,ps1}` v sekci `updates.*`. vue-i18n bere
+  `{...}` jako placeholder pro interpolaci, takže `{sh,ps1}` (s čárkou)
+  vyhodnotil jako neplatnou proměnnou a celý i18n soubor se nenačetl.
+  Přepsáno na `(sh/ps1)` v `cs.json` + `en.json`. Same fix se týká i
+  `queued_desc` a `how_docker_desc` klíčů.
+
 ## [3.0.0] — 2026-05-08
 
 **Major release** — kontrola a upgrade nových verzí přímo z UI je poslední
