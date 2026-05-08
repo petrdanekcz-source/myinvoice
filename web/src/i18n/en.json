@@ -33,7 +33,14 @@
     "result_applied": "Upgrade completed successfully",
     "result_failed": "Upgrade failed",
     "applied_at": "Completed",
-    "no_admin": "Updates are available to administrators only."
+    "no_admin": "Updates are available to administrators only.",
+    "how_it_works": "How upgrades work",
+    "how_docker_title": "Docker installation",
+    "how_docker_desc": "Clicking 'Update' writes a flag file `storage/upgrade-requested.json`. A host-side watcher (`cmd/docker-update-watcher.{sh,ps1}` as systemd unit / Scheduled Task) picks it up and runs `cmd/docker-update.{sh,ps1}` — pulling the new image, restarting the stack, running migrations. The result and log appear on this page.",
+    "how_docker_setup": "If the watcher is not yet installed, follow § 19.4 of the manual (systemd unit on Linux, Scheduled Task on Windows). Without the watcher, run on the host manually after clicking 'Update':",
+    "how_native_title": "Native installation",
+    "how_native_desc": "For native deployments (shared hosting / VPS without Docker) the UI in this version does not download the tarball automatically — instead it shows exact copy-paste commands after you click 'Update'. Requires PHP CLI + Composer + Node + pnpm on the host. If those are unavailable, use the production bundle from the release page (full deployable tar.gz):",
+    "manual_link": "Details in the manual — § 19 Updates"
   },
   "auth": {
     "login": "Sign in", "login_title": "Sign in", "login_subtitle": "Sign in to your account",

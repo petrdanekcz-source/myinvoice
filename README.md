@@ -173,6 +173,15 @@ z GHCR), restartuje stack a doběhne pending migrace. Volumes (DB data) zůstáv
 zachovány. Nový image se publikuje automaticky při každém release tagu
 `v*.*.*`.
 
+> 🔔 **Upgrade přímo z UI (admin):** od **v3.0.0** aplikace denně kontroluje
+> GitHub Releases API a v patičce zobrazí aktuální verzi + badge pokud je
+> dostupná novější. Admin v **Systém → Aktualizace** vidí release notes a
+> tlačítkem **„Aktualizovat"** zařadí upgrade do fronty. Vlastní pull image
+> + restart provádí host-side proces `cmd/docker-update-watcher.{sh,ps1}` —
+> nainstaluj ho jako systemd unit / Scheduled Task (návod v manuálu § 19.4).
+> Bez watcheru pořád funguje shell příkaz výše. Daily check ke svému běhu
+> potřebuje cron `php api/bin/cron-version-check.php` (1× denně).
+
 ### Varianta B — build z source (pro vývoj)
 
 S klonem repa máš přístup k celému kódu, můžeš upravovat a build si vyrobí
@@ -379,6 +388,42 @@ Po dokončení tě wizard **automaticky přihlásí** a přesměruje do aplikace
 V menu **Systém → Dodavatelé** klikni *Nový dodavatel*. Stačí zadat IČ → ARES doplní
 zbytek. V horní liště se objeví přepínač pro snadné přepínání mezi firmami.
 
+### Aktualizace nativní instalace
+
+Klasická cesta (vyžaduje Composer + Node + pnpm na hostu):
+
+```bash
+git fetch --tags
+git checkout vX.Y.Z
+cd api && composer install --no-dev && cd ..
+cd web && pnpm install && pnpm build && cd ..
+php tools/generateManualHtml.php
+php tools/exportManualToPdf.php
+php api/bin/migrate.php
+```
+
+Bez Composeru / Node (sdílený hosting) — stáhni **production bundle** z release
+page (od **v3.0.0** se publikuje automaticky při tagu):
+
+```bash
+TAG=3.0.0
+curl -LO https://github.com/radekhulan/myinvoice/releases/download/v$TAG/myinvoice-$TAG.tar.gz
+sha256sum -c myinvoice-$TAG.tar.gz.sha256   # ověř integritu
+tar -xzf myinvoice-$TAG.tar.gz --strip-components=1 \
+  --exclude='cfg.php' --exclude='cfg.local.php' \
+  --exclude='storage' --exclude='private' --exclude='log'
+php api/bin/migrate.php
+```
+
+Bundle obsahuje hotové `api/vendor/`, `web/dist/`, `manual/generated/` i
+`manual.pdf`, takže žádný build krok není potřeba.
+
+> 🔔 **Upgrade z UI (admin):** v **Systém → Aktualizace** je tlačítko
+> *Aktualizovat*, které ti tyto příkazy zobrazí jako copy-paste box (Phase 2
+> doplní automatický download + extrakci). Footer aplikace zobrazuje
+> aktuální verzi + badge pokud je dostupná novější (denně refreshuje
+> `cron-version-check.php`).
+
 ---
 
 ## CLI nástroje
@@ -401,6 +446,19 @@ V `cmd/` jsou připravené `.cmd` (Windows) i `.sh` (Linux) wrappery:
 cmd/cron-bank-scan.sh        # každých 15 min — scan příchozích GPC výpisů
 cmd/cron-send-reminders.sh   # 1× denně — upomínky po splatnosti (s --cooldown)
 cmd/cron-cleanup.sh          # 1× denně — čištění expirovaných session, logů, PDF cache
+```
+
+K tomu **`api/bin/cron-version-check.php`** — denní kontrola GitHub Releases
+API, cachuje poslední dostupnou verzi + release notes do `app_meta`. Bez
+něj UI v `Systém → Aktualizace` vidí jen aktuální verzi a admin se nedozví
+o nové. Plánuj 1× denně:
+
+```bash
+# Linux cron (nativní instalace)
+0 6 * * *  cd /opt/myinvoice && php api/bin/cron-version-check.php
+
+# Docker
+0 6 * * *  docker compose -f /opt/myinvoice/docker-compose.production.yml exec -T app php api/bin/cron-version-check.php
 ```
 
 ---

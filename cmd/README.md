@@ -22,6 +22,7 @@ samotného skriptu, takže jsou přenositelné mezi `C:\inetpub\wwwroot\…`,
 | `cron-bank-scan.{cmd,sh}` | Auto-import nových GPC výpisů z `private/bank-incoming/` + matching plateb na faktury |
 | `cron-send-reminders.{cmd,sh}` | Odeslání upomínkových e-mailů na faktury po splatnosti (`--days=N`, `--cooldown=N`, `--dry-run`) |
 | `cron-send-approval-reminders.{cmd,sh}` | Upomínky zákazníkům, kteří neschválili výkaz víceprací (`--days=N`, `--dry-run`) |
+| `cron-version-check.{cmd,sh}` | Denní kontrola GitHub Releases API; cachuje poslední dostupnou verzi + release notes pro **Systém → Aktualizace** |
 
 ### Docker — vývoj v kontejnerech
 
@@ -31,6 +32,7 @@ samotného skriptu, takže jsou přenositelné mezi `C:\inetpub\wwwroot\…`,
 | `docker-install.{sh,ps1}` | First-run setup: vygeneruje `.env` + `cfg.docker.php`, postaví image **z lokálních zdrojů**, `up -d`, počká na DB healthcheck, spustí migrace, vypíše URL setup wizardu |
 | `docker-ghcr.{sh,ps1}` | One-click install **z pre-built image na GHCR** (`ghcr.io/radekhulan/myinvoice:latest`) — žádný local build. Stejně jako install vygeneruje `.env` + `cfg.docker.php`, místo `build` udělá `pull`, pak `up -d` + migrace |
 | `docker-update.{sh,ps1}` | Update běžící instance — auto-detekce: `git pull` + rebuild (source mode) **nebo** `pull` z GHCR (registry mode), pak `up -d` + migrace |
+| `docker-update-watcher.{sh,ps1}` | Host-side daemon (systemd unit / Scheduled Task) — sleduje flag soubor `storage/upgrade-requested.json` (zapisuje UI v **Systém → Aktualizace**) a spustí `docker-update`, výsledek do `upgrade-result.json` |
 
 ### Build / deploy / kvalita
 
@@ -49,6 +51,7 @@ samotného skriptu, takže jsou přenositelné mezi `C:\inetpub\wwwroot\…`,
 | `cron-bank-scan` | každých 15–30 minut | `*/30 * * * *` |
 | `cron-send-reminders` | 1× denně (pracovní dny) | 09:00, Po–Pá |
 | `cron-send-approval-reminders` | 1× denně (pracovní dny) | 09:15, Po–Pá |
+| `cron-version-check` | 1× denně | 06:00 |
 
 Logy se ukládají do `log/cron/<nazev>-YYYY-MM-DD.log`. Stav úloh sleduj
 v admin/activity-log (každý cron sám zapíše záznam `cron.<nazev>`).
@@ -62,7 +65,18 @@ schtasks /create /tn "MyInvoice BackupPDF" /tr "C:\inetpub\wwwroot\myinvoice.cz\
 schtasks /create /tn "MyInvoice BankScan"  /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-bank-scan.cmd"      /sc minute /mo 30 /ru SYSTEM
 schtasks /create /tn "MyInvoice Reminders" /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-send-reminders.cmd" /sc weekly /d MON,TUE,WED,THU,FRI /st 09:00 /ru SYSTEM
 schtasks /create /tn "MyInvoice ApprovalReminders" /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-send-approval-reminders.cmd" /sc weekly /d MON,TUE,WED,THU,FRI /st 09:15 /ru SYSTEM
+schtasks /create /tn "MyInvoice VersionCheck"      /tr "C:\inetpub\wwwroot\myinvoice.cz\cmd\cron-version-check.cmd"           /sc daily /st 06:00 /ru SYSTEM
 ```
+
+> 💡 **Update watcher** (samostatný proces, ne plánovaná úloha) — kontroluje
+> flag soubor `storage/upgrade-requested.json` a aplikuje upgrade z UI. Spouští
+> se **At startup**, ne na cron:
+>
+> ```cmd
+> schtasks /create /tn "MyInvoice UpdateWatcher" ^
+>   /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\inetpub\wwwroot\myinvoice.cz\cmd\docker-update-watcher.ps1" ^
+>   /sc onstart /ru SYSTEM /rl HIGHEST
+> ```
 
 > ⚠️ PHP musí být v `PATH` účtu, pod kterým úloha běží (typicky `SYSTEM`
 > nemá uživatelský PATH — ověř `where php` v cmd spuštěném jako SYSTEM přes
@@ -87,9 +101,34 @@ Edituj `crontab -e` (nebo `/etc/cron.d/myinvoice`):
 */30 *  *   *   *    /var/www/myinvoice.cz/cmd/cron-bank-scan.sh
   0  9  *   *   1-5  /var/www/myinvoice.cz/cmd/cron-send-reminders.sh
  15  9  *   *   1-5  /var/www/myinvoice.cz/cmd/cron-send-approval-reminders.sh
+  0  6  *   *   *    /var/www/myinvoice.cz/cmd/cron-version-check.sh
 ```
 
 `*.sh` skripty musí být spustitelné: `chmod +x cmd/*.sh`.
+
+> 💡 **Update watcher** (samostatný proces, ne crontab job) — sleduje flag
+> soubor `storage/upgrade-requested.json` a aplikuje upgrade spuštěný
+> z UI. Nejjednodušší instalace přes systemd:
+>
+> ```bash
+> sudo tee /etc/systemd/system/myinvoice-update-watcher.service <<'EOF'
+> [Unit]
+> Description=MyInvoice update watcher
+> After=docker.service
+>
+> [Service]
+> Type=simple
+> WorkingDirectory=/var/www/myinvoice.cz
+> ExecStart=/var/www/myinvoice.cz/cmd/docker-update-watcher.sh
+> Restart=always
+>
+> [Install]
+> WantedBy=multi-user.target
+> EOF
+>
+> sudo systemctl daemon-reload
+> sudo systemctl enable --now myinvoice-update-watcher
+> ```
 
 ### Manuální spuštění (debug)
 

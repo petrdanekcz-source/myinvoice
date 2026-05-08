@@ -344,6 +344,57 @@ function fmtDate(s?: string | null): string {
         <h2 class="text-lg font-semibold text-neutral-900 mb-3">{{ t('updates.release_notes') }} (v{{ status.latest }})</h2>
         <div class="release-notes prose prose-sm max-w-none" v-html="renderedNotes"></div>
       </section>
+
+      <!-- How upgrade works — vždy viditelné, environment-specific instrukce -->
+      <section class="rounded-lg border border-neutral-200 bg-white p-5">
+        <h2 class="text-lg font-semibold text-neutral-900 mb-3">{{ t('updates.how_it_works') }}</h2>
+
+        <template v-if="status.environment === 'docker'">
+          <h3 class="text-sm font-semibold text-neutral-800 flex items-center gap-2 mt-1">
+            <svg class="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7L9 18l-5-5"/></svg>
+            {{ t('updates.how_docker_title') }}
+          </h3>
+          <p class="text-sm text-neutral-600 mt-1.5 leading-relaxed">{{ t('updates.how_docker_desc') }}</p>
+          <p class="text-sm text-neutral-600 mt-3 leading-relaxed">{{ t('updates.how_docker_setup') }}</p>
+          <pre class="mt-2 rounded-md bg-neutral-900 text-neutral-100 p-3 text-xs leading-relaxed overflow-x-auto"><code># Linux / macOS
+cd /opt/myinvoice
+bash cmd/docker-update.sh
+
+# Windows (PowerShell)
+cd C:\inetpub\myinvoice
+powershell -NoProfile -ExecutionPolicy Bypass -File cmd\docker-update.ps1</code></pre>
+        </template>
+
+        <template v-else>
+          <h3 class="text-sm font-semibold text-neutral-800 flex items-center gap-2 mt-1">
+            <svg class="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            {{ t('updates.how_native_title') }}
+          </h3>
+          <p class="text-sm text-neutral-600 mt-1.5 leading-relaxed">{{ t('updates.how_native_desc') }}</p>
+          <pre class="mt-2 rounded-md bg-neutral-900 text-neutral-100 p-3 text-xs leading-relaxed overflow-x-auto"><code># Klasický postup (vyžaduje Composer + Node + pnpm na hostu)
+git fetch --tags
+git checkout v{{ status.latest ?? 'X.Y.Z' }}
+cd api && composer install --no-dev && cd ..
+cd web && pnpm install && pnpm build && cd ..
+php tools/generateManualHtml.php
+php tools/exportManualToPdf.php
+php api/bin/migrate.php
+
+# Alternativa: production bundle (bez Composer / Node)
+# https://github.com/radekhulan/myinvoice/releases/latest
+curl -LO https://github.com/radekhulan/myinvoice/releases/download/v{{ status.latest ?? 'X.Y.Z' }}/myinvoice-{{ status.latest ?? 'X.Y.Z' }}.tar.gz
+tar -xzf myinvoice-{{ status.latest ?? 'X.Y.Z' }}.tar.gz --strip-components=1 \
+  --exclude='cfg.php' --exclude='cfg.local.php' \
+  --exclude='storage' --exclude='private' --exclude='log'
+php api/bin/migrate.php</code></pre>
+        </template>
+
+        <p class="text-xs text-neutral-500 mt-3">
+          <a href="/manual?ch=19_Aktualizace" target="_blank" rel="noopener" class="text-primary-600 hover:text-primary-800 hover:underline">
+            {{ t('updates.manual_link') }} →
+          </a>
+        </p>
+      </section>
     </div>
 
     <div v-if="errorMsg" class="rounded-md bg-error-50 border border-error-200 p-4 text-sm text-error-700">

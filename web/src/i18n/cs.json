@@ -33,7 +33,14 @@
     "result_applied": "Upgrade úspěšně dokončen",
     "result_failed": "Upgrade selhal",
     "applied_at": "Dokončeno",
-    "no_admin": "Aktualizace jsou dostupné jen administrátorům."
+    "no_admin": "Aktualizace jsou dostupné jen administrátorům.",
+    "how_it_works": "Jak upgrade funguje",
+    "how_docker_title": "Docker instalace",
+    "how_docker_desc": "Klik na 'Aktualizovat' zapíše flag soubor `storage/upgrade-requested.json`. Mimo container běžící watcher (`cmd/docker-update-watcher.{sh,ps1}` jako systemd unit / Scheduled Task) ho zachytí a spustí `cmd/docker-update.{sh,ps1}` — pull nové image, restart stacku, migrace. Výsledek + log se objeví na této stránce.",
+    "how_docker_setup": "Pokud watcher ještě nemáš nainstalovaný, postupuj podle § 19.4 v manuálu (systemd unit pro Linux, Scheduled Task pro Windows). Bez watcheru spusť po kliku na 'Aktualizovat' na hostu ručně:",
+    "how_native_title": "Nativní instalace",
+    "how_native_desc": "Pro nativní deployment (sdílený hosting / VPS bez Dockeru) UI v této verzi nepouští download tarballu automaticky — místo toho ti po kliku na 'Aktualizovat' ukáže přesné copy-paste příkazy. Vyžaduje na hostu PHP CLI + Composer + Node + pnpm. Pokud nejsou k dispozici, použij production bundle z release page (kompletní deployable tar.gz):",
+    "manual_link": "Detaily v manuálu — § 19 Aktualizace"
   },
   "auth": {
     "login": "Přihlásit", "login_title": "Přihlášení", "login_subtitle": "Přihlaste se ke svému účtu",

@@ -118,7 +118,7 @@ rm -f storage/upgrade-requested.json
 ## 19.5 Aktualizace v UI — nativní instalace
 
 Pro nativní deployment (sdílený hosting / VPS bez Dockeru) UI v této
-verzi (v2.4.0) zatím **neimplementuje** automatický download release
+verzi (v3.0.0) zatím **neimplementuje** automatický download release
 tarballu — pouze ti ukáže copy-paste příkazy:
 
 ```bash
@@ -193,7 +193,7 @@ nová verze, můžeš pollovat veřejný endpoint:
 curl -s https://myinvoice.tvuj-server.cz/api/version | jq
 ```
 
-Vrátí `{ "current": "2.4.0", "latest": "2.5.0", "has_update": true,
-"release_url": "https://github.com/.../v2.5.0" }`. Tohle je veřejný
+Vrátí `{ "current": "3.0.0", "latest": "3.1.0", "has_update": true,
+"release_url": "https://github.com/.../v3.1.0" }`. Tohle je veřejný
 endpoint bez auth, ale stejná data vidí kdokoliv s přístupem k aplikaci
 ve footru.

@@ -70,6 +70,13 @@ nebo `build:` blok v compose, jede přes `pull`.
 Nový image se publikuje automaticky při každém release tagu `v*.*.*`,
 takže aktualizace je otázkou jednoho příkazu.
 
+> 🔔 **Upgrade přímo z UI:** od **v3.0.0** vidí admin v **Systém →
+> Aktualizace** stav verze + tlačítko *Aktualizovat*, které pull image
+> + restart spustí přes host-side watcher. Detaily včetně instalace
+> watcheru jako systemd unit / Scheduled Task → § 19 Aktualizace.
+> Pro denní kontrolu nové verze nezapomeň naplánovat
+> `php api/bin/cron-version-check.php` (1× denně, viz § 19.2).
+
 > **WSL2 / Linux po klonu:** pokud `./cmd/docker-ghcr.sh` hlásí
 > `Permission denied` nebo `/usr/bin/env: 'bash\r': No such file…`,
 > má tvůj git zapnutý `core.autocrlf=true`, který na checkoutu konvertuje

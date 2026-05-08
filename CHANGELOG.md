@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.4.0] — 2026-05-08
+## [3.0.0] — 2026-05-08
 
-Kontrola a upgrade nových verzí — poslední plánovaná feature před zafixováním
-master větve. Po této verzi přejde vývoj do `dev` větve a do `master` budou
-nové funkce přicházet v max. měsíčních intervalech (kromě security patches).
+**Major release** — kontrola a upgrade nových verzí přímo z UI je poslední
+plánovaná feature před zafixováním `master` větve. Po této verzi přejde
+vývoj do `dev` větve a do `master` budou nové funkce přicházet v max.
+měsíčních intervalech (kromě security patches).
+
+Skok z 2.x na 3.x je bump kvůli významnosti pro provoz: footer aplikace
+nově persistentně signalizuje stav verze, admin má kompletní upgrade
+workflow z UI, a CI publikuje production bundle pro nativní deployment
+bez Composer / Node na hostu.
 
 ### Added
 
@@ -43,6 +49,27 @@ nové funkce přicházet v max. měsíčních intervalech (kromě security patch
   deployable: `api/vendor/`, `web/dist/`, `manual/generated/`, `manual.pdf`)
   + SHA-256 a uploadne jako release asset. Připravuje cestu pro native
   auto-update bez Composer / Node na hostu.
+- **`cmd/cron-version-check.{sh,cmd}`** — wrapper skripty stejné konvence
+  jako ostatní crony (logy do `log/cron/version-check-YYYY-MM-DD.log`).
+  Příklad crontab + `schtasks` v `cmd/README.md`.
+- **„Jak upgrade funguje" sekce v Systém → Aktualizace** — vždy viditelná,
+  environment-specific instrukce (Docker → watcher info + fallback shell;
+  nativní → klasický git checkout + production bundle download), nezávisle
+  na tom, jestli je k dispozici novější verze. Předtím se instrukce
+  zobrazily jen po kliku na *Aktualizovat*.
+
+### Documentation
+
+- `README.md` — sekce v Docker quick-startu o upgrade z UI + watcheru;
+  nová podsekce „Aktualizace nativní instalace" (git checkout / production
+  bundle); cron-version-check v Cron skriptech.
+- `manual/02_Instalace.md` — pointer u Docker varianty na § 19 + zmínka
+  o `cron-version-check`.
+- `manual/19_Aktualizace.md` — kompletně nová kapitola: workflow, instalace
+  watcheru jako systemd unit / Scheduled Task, recovery při neúspěchu,
+  external monitoring přes `/api/version`.
+- `cmd/README.md` — nová položka cron-version-check + docker-update-watcher
+  v tabulkách; schtasks + crontab + systemd unit příklady.
 
 ### Migration
 
