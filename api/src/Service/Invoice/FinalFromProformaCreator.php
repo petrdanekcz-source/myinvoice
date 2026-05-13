@@ -86,8 +86,8 @@ final class FinalFromProformaCreator
                 'INSERT INTO invoices
                    (invoice_type, parent_invoice_id, client_id, project_id, supplier_id,
                     issue_date, tax_date, due_date, currency_id, reverse_charge, language,
-                    note_above_items, advance_paid_amount, status, created_by)
-                 VALUES ("invoice", ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, "draft", ?)'
+                    note_above_items, advance_paid_amount, payment_method, status, created_by)
+                 VALUES ("invoice", ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, "draft", ?)'
             );
             $stmt->execute([
                 $proformaId,
@@ -101,6 +101,7 @@ final class FinalFromProformaCreator
                 $proforma['language'],
                 $noteAbove,
                 $advance,
+                (string) ($proforma['payment_method'] ?? 'bank_transfer'),
                 $userId ?: null,
             ]);
             $finalId = (int) $pdo->lastInsertId();

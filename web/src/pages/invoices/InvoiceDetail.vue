@@ -417,7 +417,11 @@ async function sendTestReminder() {
   }
 }
 
-const canSendTestReminder = computed(() => invoice.value && invoice.value.invoice_type === 'invoice')
+const canSendTestReminder = computed(() =>
+  invoice.value
+  && invoice.value.invoice_type === 'invoice'
+  && (invoice.value.payment_method ?? 'bank_transfer') === 'bank_transfer'
+)
 
 function openSendModal() {
   if (!invoice.value) return
@@ -467,11 +471,13 @@ const canSendEmail = computed(() =>
 )
 const canSendTest = computed(() => invoice.value && invoice.value.invoice_type !== 'cancellation')
 
-// Upomínka — jen pro běžnou fakturu (ne proforma/dobropis/storno) ve stavu issued/sent/reminded a po splatnosti
+// Upomínka — jen pro běžnou fakturu (ne proforma/dobropis/storno) ve stavu issued/sent/reminded,
+// po splatnosti a placenou bankovním převodem (kartové/hotovostní úhrady se neupomínají).
 const canSendReminder = computed(() => {
   if (!invoice.value) return false
   if (invoice.value.invoice_type !== 'invoice') return false
   if (!['issued', 'sent', 'reminded'].includes(invoice.value.status)) return false
+  if ((invoice.value.payment_method ?? 'bank_transfer') !== 'bank_transfer') return false
   const due = new Date(invoice.value.due_date)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -848,12 +854,16 @@ async function updateApprovalStatus() {
           <div class="flex justify-between"><dt class="text-neutral-500">{{ t('common.currency') }}</dt><dd class="font-mono">{{ invoice.currency }}</dd></div>
           <div class="flex justify-between"><dt class="text-neutral-500">{{ t('invoice.language') }}</dt><dd>{{ invoice.language.toUpperCase() }}</dd></div>
           <div class="flex justify-between"><dt class="text-neutral-500">{{ t('invoice.reverse_charge') }}</dt><dd>{{ invoice.reverse_charge ? t('common.yes') : t('common.no') }}</dd></div>
+          <div class="flex justify-between">
+            <dt class="text-neutral-500">{{ t('payment_method.label') }}</dt>
+            <dd>{{ t('payment_method.' + (invoice.payment_method ?? 'bank_transfer')) }}</dd>
+          </div>
         </dl>
       </div>
 
       <div class="bg-white border border-neutral-200 rounded-lg p-5 shadow-sm">
         <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 mb-3">{{ t('settings.account_cz') }}</h3>
-        <dl class="space-y-1 text-sm">
+        <dl v-if="(invoice.payment_method ?? 'bank_transfer') === 'bank_transfer'" class="space-y-1 text-sm">
           <div v-if="invoice.bank_account_number" class="font-mono text-xs">
             {{ invoice.bank_account_number }} / {{ invoice.bank_code }}
           </div>
@@ -863,6 +873,9 @@ async function updateApprovalStatus() {
             {{ t('invoice.bank_not_set', { currency: invoice.currency }) }}
           </div>
         </dl>
+        <div v-else class="text-xs text-neutral-500">
+          {{ t('payment_method.hint') }}
+        </div>
       </div>
     </div>
 

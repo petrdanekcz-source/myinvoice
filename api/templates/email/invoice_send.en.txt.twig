@@ -9,9 +9,15 @@
 Variable symbol: {{ invoice.varsymbol }}
 Issue date:      {{ invoice.issue_date|date('M j, Y') }}
 Due date:        {{ invoice.due_date|date('M j, Y') }}
-Amount due:      {{ amount_to_pay|number_format(2, '.', ',') }} {{ invoice.currency }}
+{% if is_paid %}Paid:            {{ amount_to_pay|number_format(2, '.', ',') }} {{ invoice.currency }} ✓{% else %}Amount due:      {{ amount_to_pay|number_format(2, '.', ',') }} {{ invoice.currency }}{% endif %}
 
-The invoice PDF is attached.
+{% if is_paid %}>>> This invoice has been paid{% if payment_method == 'card' %} online by card — please do not pay again{% elseif payment_method == 'cash' %} in cash{% else %} — please do not pay again{% endif %}.
+
+{% elseif payment_method == 'card' %}>>> Card payment. Bank transfer and QR code are not used.
+
+{% elseif payment_method == 'cash' %}>>> Cash payment.
+
+{% endif %}The invoice PDF is attached.
 
 {% if not is_test %}Thank you for your business.
 {% else %}=== TEST EMAIL — client did not receive it. ==={% endif %}

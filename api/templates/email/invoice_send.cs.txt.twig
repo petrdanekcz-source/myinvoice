@@ -9,9 +9,15 @@
 Variabilní symbol: {{ invoice.varsymbol }}
 Datum vystavení:   {{ invoice.issue_date|date('j.n.Y') }}
 Splatnost:         {{ invoice.due_date|date('j.n.Y') }}
-K úhradě:          {{ amount_to_pay|number_format(2, ',', ' ') }} {{ invoice.currency }}
+{% if is_paid %}Uhrazeno:          {{ amount_to_pay|number_format(2, ',', ' ') }} {{ invoice.currency }} ✓{% else %}K úhradě:          {{ amount_to_pay|number_format(2, ',', ' ') }} {{ invoice.currency }}{% endif %}
 
-Faktura v PDF je v příloze tohoto emailu.
+{% if is_paid %}>>> Faktura již byla uhrazena{% if payment_method == 'card' %} platební kartou online — neplaťte prosím znovu{% elseif payment_method == 'cash' %} v hotovosti{% else %} — neplaťte prosím znovu{% endif %}.
+
+{% elseif payment_method == 'card' %}>>> Úhrada platební kartou. Bankovní převod ani QR kód se nepoužije.
+
+{% elseif payment_method == 'cash' %}>>> Úhrada v hotovosti.
+
+{% endif %}Faktura v PDF je v příloze tohoto emailu.
 
 {% if not is_test %}Děkujeme za spolupráci.
 {% else %}=== TEST EMAIL — klient ho nedostal. ==={% endif %}

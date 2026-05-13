@@ -149,11 +149,15 @@ final class InvoicePdfRenderer
         //   CZK SPAYD vyžaduje VS jako mandatory pole → bez varsymbolu skip
         //   SEPA EPC (EUR i další) VS nepoužívá, jen volitelný remittance text
         //     → drafty bez VS dostanou QR taky (preview pro klienta), remittance fallback
+        //   Skip pro zaplacené faktury a pro non-bank-transfer payment_method
         $qrUri = null;
         $hasAmount = (float) $invoice['amount_to_pay'] > 0;
         $isCzk = ((string) $invoice['currency']) === 'CZK';
         $hasVs = !empty($invoice['varsymbol']);
-        if ($hasAmount && $bankData !== null && (!$isCzk || $hasVs)) {
+        $isPaid = ($invoice['status'] ?? '') === 'paid';
+        $paymentMethod = (string) ($invoice['payment_method'] ?? 'bank_transfer');
+        $isBankTransfer = $paymentMethod === 'bank_transfer';
+        if ($hasAmount && $bankData !== null && (!$isCzk || $hasVs) && !$isPaid && $isBankTransfer) {
             $qrUri = $this->qr->generate(
                 (string) $invoice['currency'],
                 (float) $invoice['amount_to_pay'],
@@ -182,6 +186,8 @@ final class InvoicePdfRenderer
             'client'            => $clientData,
             'bank'              => $bankData,
             'qr_data_uri'       => $qrUri,
+            'is_paid'           => $isPaid,
+            'payment_method'    => $paymentMethod,
             'locale'            => $locale,
             'doc_type_label'    => $this->docTypeLabel($invoice, $locale, $supplierData),
             'doc_title'         => $this->docTitle($invoice),

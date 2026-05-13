@@ -18,6 +18,13 @@ final class InvoiceValidation
             $err['invoice_type'][] = 'Neplatný typ dokladu';
         }
 
+        if (array_key_exists('payment_method', $data) && $data['payment_method'] !== null && $data['payment_method'] !== '') {
+            $pm = (string) $data['payment_method'];
+            if (!in_array($pm, ['bank_transfer', 'card', 'cash', 'other'], true)) {
+                $err['payment_method'][] = 'Neplatný způsob úhrady';
+            }
+        }
+
         if (empty($data['client_id']) || !is_numeric($data['client_id'])) {
             $err['client_id'][] = 'Klient je povinný';
         }

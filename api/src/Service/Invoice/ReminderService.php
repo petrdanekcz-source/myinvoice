@@ -51,6 +51,13 @@ final class ReminderService
         if (!in_array($invoice['invoice_type'], ['invoice', 'proforma'], true)) {
             throw new \DomainException('Upomínat lze jen běžnou fakturu nebo proformu (ne dobropis/storno).');
         }
+        // Card/cash/other = úhrada mimo bankovní převod. QR ani bankovní spojení se na
+        // PDF/emailu nepoužívají; upomínka „zaplaťte převodem" by klienta jen mátla.
+        // Cron filtruje už v SQL; tahle pojistka chrání i bulk/manual cestu.
+        $paymentMethod = (string) ($invoice['payment_method'] ?? 'bank_transfer');
+        if ($paymentMethod !== 'bank_transfer') {
+            throw new \DomainException('Upomínat lze jen faktury s platbou bankovním převodem.');
+        }
 
         $today = new \DateTimeImmutable('today');
         $due   = new \DateTimeImmutable((string) $invoice['due_date']);

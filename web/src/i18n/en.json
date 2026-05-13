@@ -505,6 +505,18 @@
     "reminded": "Reminded", "paid": "Paid", "cancelled": "Cancelled",
     "issued_not_sent": "Issued (not sent)"
   },
+  "payment_method": {
+    "label": "Payment method",
+    "hint": "For card or cash payments the PDF and email omit the QR code and bank account.",
+    "bank_transfer": "Bank transfer",
+    "card": "Card",
+    "cash": "Cash",
+    "other": "Other",
+    "paid_already": "This invoice has been paid",
+    "paid_by_card": "Paid online by card — please do not pay again.",
+    "paid_by_cash": "Paid in cash.",
+    "paid_generic": "Please do not pay again."
+  },
   "supplier": {
     "active_label": "Working as",
     "switcher_title": "Switch supplier",

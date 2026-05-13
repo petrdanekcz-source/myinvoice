@@ -505,6 +505,18 @@
     "reminded": "Upomínka", "paid": "Zaplaceno", "cancelled": "Storno",
     "issued_not_sent": "Vystaveno (neodesláno)"
   },
+  "payment_method": {
+    "label": "Způsob úhrady",
+    "hint": "U platby kartou nebo v hotovosti se v PDF a e-mailu nezobrazí QR kód ani bankovní spojení.",
+    "bank_transfer": "Bankovní převod",
+    "card": "Platební karta",
+    "cash": "Hotově",
+    "other": "Jiný způsob",
+    "paid_already": "Faktura již byla uhrazena",
+    "paid_by_card": "Uhrazeno platební kartou online — neplaťte prosím znovu.",
+    "paid_by_cash": "Uhrazeno v hotovosti.",
+    "paid_generic": "Neplaťte prosím znovu."
+  },
   "supplier": {
     "active_label": "Pracuješ jako",
     "switcher_title": "Přepnout dodavatele",

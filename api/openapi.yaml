@@ -1925,6 +1925,11 @@ components:
         status:
           type: string
           enum: [draft, issued, paid, cancelled]
+        payment_method:
+          type: string
+          enum: [bank_transfer, card, cash, other]
+          default: bank_transfer
+          description: "Způsob úhrady. U card/cash se v PDF/emailu nezobrazuje QR ani bankovní spojení a místo výzvy k platbě se uvede odpovídající poznámka."
         language: { type: string, enum: [cs, en], description: "Jazyk PDF/emailů" }
         reverse_charge: { type: boolean }
         issue_date: { type: string, format: date }
@@ -2023,6 +2028,11 @@ components:
           nullable: true
           description: "Volitelný manuální override automatického číslování. U draftu lze ponechat null — číslo se přidělí při /issue."
         advance_paid_amount: { type: number, format: float, default: 0, description: "Záloha k odečtení od total_with_vat" }
+        payment_method:
+          type: string
+          enum: [bank_transfer, card, cash, other]
+          default: bank_transfer
+          description: "Způsob úhrady. Pro card/cash se v PDF/emailu nevygeneruje QR ani bankovní spojení."
         exchange_rate: { type: number, format: float, nullable: true, description: "Volitelný manuální override ČNB kurzu (CZK / 1 jednotka cizí měny)" }
         note: { type: string, nullable: true, description: "Generická poznámka (mapuje se na note_below_items pokud není uvedeno jinak)" }
         note_above_items: { type: string, nullable: true }

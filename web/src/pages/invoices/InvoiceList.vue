@@ -95,7 +95,8 @@ const markPayableSelected = computed(() => {
     )
 })
 
-// Hromadná upomínka — jen běžné faktury (ne proforma/dobropis/storno) ve stavu issued/sent/reminded a po splatnosti
+// Hromadná upomínka — jen běžné faktury (ne proforma/dobropis/storno) ve stavu issued/sent/reminded,
+// po splatnosti a placené bankovním převodem (kartové/hotovostní úhrady se neupomínají).
 const reminderSelected = computed(() => {
   const ids = new Set(selectedIds.value)
   const today = new Date()
@@ -106,6 +107,7 @@ const reminderSelected = computed(() => {
       if (!ids.has(inv.id)) return false
       if (inv.invoice_type !== 'invoice') return false
       if (!['issued', 'sent', 'reminded'].includes(inv.status)) return false
+      if ((inv.payment_method ?? 'bank_transfer') !== 'bank_transfer') return false
       const due = new Date(inv.due_date)
       return due < today
     })

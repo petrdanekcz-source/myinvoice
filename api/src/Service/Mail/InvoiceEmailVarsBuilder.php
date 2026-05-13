@@ -44,14 +44,16 @@ final class InvoiceEmailVarsBuilder
         }
 
         return [
-            'invoice'       => $invoice,
-            'client_name'   => $invoice['client_company_name'] ?? '',
-            'amount_to_pay' => (float) ($invoice['amount_to_pay'] ?? $invoice['total_with_vat']),
-            'days_overdue'  => $daysOverdue,
-            'subject'       => $subject,
-            'qr_data_uri'   => $this->generateQr($invoice),
-            'supplier'      => $this->loadSupplierFooter($invoice),
-            'is_test'       => false,
+            'invoice'        => $invoice,
+            'client_name'    => $invoice['client_company_name'] ?? '',
+            'amount_to_pay'  => (float) ($invoice['amount_to_pay'] ?? $invoice['total_with_vat']),
+            'days_overdue'   => $daysOverdue,
+            'subject'        => $subject,
+            'qr_data_uri'    => $this->generateQr($invoice),
+            'supplier'       => $this->loadSupplierFooter($invoice),
+            'is_test'        => false,
+            'is_paid'        => ($invoice['status'] ?? '') === 'paid',
+            'payment_method' => (string) ($invoice['payment_method'] ?? 'bank_transfer'),
         ];
     }
 
@@ -78,16 +80,18 @@ final class InvoiceEmailVarsBuilder
         }
 
         return [
-            'greeting'      => $greeting,
-            'intro'         => $intro,
-            'intro_plain'   => $intro_plain,
-            'invoice'       => $invoice,
-            'client_name'   => $invoice['client_company_name'] ?? '',
-            'amount_to_pay' => $amount,
-            'is_test'       => $isTest,
-            'subject'       => $this->buildSubject($invoice, $isTest, $locale),
-            'qr_data_uri'   => $this->generateQr($invoice),
-            'supplier'      => $this->loadSupplierFooter($invoice),
+            'greeting'       => $greeting,
+            'intro'          => $intro,
+            'intro_plain'    => $intro_plain,
+            'invoice'        => $invoice,
+            'client_name'    => $invoice['client_company_name'] ?? '',
+            'amount_to_pay'  => $amount,
+            'is_test'        => $isTest,
+            'subject'        => $this->buildSubject($invoice, $isTest, $locale),
+            'qr_data_uri'    => $this->generateQr($invoice),
+            'supplier'       => $this->loadSupplierFooter($invoice),
+            'is_paid'        => ($invoice['status'] ?? '') === 'paid',
+            'payment_method' => (string) ($invoice['payment_method'] ?? 'bank_transfer'),
         ];
     }
 
@@ -95,6 +99,8 @@ final class InvoiceEmailVarsBuilder
     {
         if (empty($invoice['varsymbol'])) return null;
         if (($invoice['amount_to_pay'] ?? 0) <= 0) return null;
+        if (($invoice['status'] ?? '') === 'paid') return null;
+        if (($invoice['payment_method'] ?? 'bank_transfer') !== 'bank_transfer') return null;
 
         // Bank z snapshot (issued+) nebo live z currencies
         $bank = null;

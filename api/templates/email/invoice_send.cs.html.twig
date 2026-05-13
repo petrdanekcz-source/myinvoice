@@ -24,15 +24,45 @@
           <td style="padding:4px 0;font-weight:600;">{{ invoice.due_date|date('j.n.Y') }}</td>
         </tr>
         <tr>
-          <td style="padding:8px 0 0;color:#7A748C;border-top:1px solid #E5E0F4;">K úhradě</td>
-          <td style="padding:8px 0 0;border-top:1px solid #E5E0F4;font-size:18px;font-weight:700;color:#3B2D83;font-family:monospace;">
-            {{ amount_to_pay|number_format(2, ',', ' ') }} {{ invoice.currency }}
+          <td style="padding:8px 0 0;color:#7A748C;border-top:1px solid #E5E0F4;">{% if is_paid %}Uhrazeno{% else %}K úhradě{% endif %}</td>
+          <td style="padding:8px 0 0;border-top:1px solid #E5E0F4;font-size:18px;font-weight:700;color:{% if is_paid %}#2E7D32{% else %}#3B2D83{% endif %};font-family:monospace;">
+            {{ amount_to_pay|number_format(2, ',', ' ') }} {{ invoice.currency }}{% if is_paid %} ✓{% endif %}
           </td>
         </tr>
       </table>
     </td>
   </tr>
 </table>
+
+{% if is_paid %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0 8px;">
+  <tr>
+    <td style="padding:14px 18px;background:#E8F5E9;border-left:3px solid #2E7D32;border-radius:4px;font-size:14px;color:#1B5E20;">
+      <strong>Faktura již byla uhrazena.</strong>
+      {% if payment_method == 'card' %} Platba proběhla platební kartou online — neplaťte prosím znovu.
+      {% elseif payment_method == 'cash' %} Platba proběhla v hotovosti.
+      {% else %} Neplaťte prosím znovu.
+      {% endif %}
+    </td>
+  </tr>
+</table>
+{% elseif payment_method == 'card' %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0 8px;">
+  <tr>
+    <td style="padding:14px 18px;background:#FFF8E1;border-left:3px solid #E8A547;border-radius:4px;font-size:14px;color:#5D4500;">
+      <strong>Úhrada platební kartou.</strong> Bankovní převod ani QR kód se pro tuto fakturu nepoužije.
+    </td>
+  </tr>
+</table>
+{% elseif payment_method == 'cash' %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0 8px;">
+  <tr>
+    <td style="padding:14px 18px;background:#FFF8E1;border-left:3px solid #E8A547;border-radius:4px;font-size:14px;color:#5D4500;">
+      <strong>Úhrada v hotovosti.</strong>
+    </td>
+  </tr>
+</table>
+{% endif %}
 
 {% if qr_data_uri %}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:32px 0 8px;">

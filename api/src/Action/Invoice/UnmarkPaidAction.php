@@ -11,6 +11,7 @@ use MyInvoice\Middleware\AuthMiddleware;
 use MyInvoice\Repository\InvoiceRepository;
 use MyInvoice\Service\ActivityLogger;
 use MyInvoice\Service\IpMatcher;
+use MyInvoice\Service\Pdf\InvoicePdfRenderer;
 use MyInvoice\Service\Stats\StatsRecomputer;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -33,6 +34,7 @@ final class UnmarkPaidAction
         private readonly ActivityLogger $logger,
         private readonly IpMatcher $ipMatcher,
         private readonly StatsRecomputer $stats,
+        private readonly InvoicePdfRenderer $pdf,
     ) {}
 
     public function __invoke(Request $request, Response $response, array $args): Response
@@ -78,6 +80,9 @@ final class UnmarkPaidAction
                     paid_at = NULL
               WHERE id = ? AND status = 'paid'"
         )->execute([$id]);
+
+        // Cached PDF nese „UHRAZENO" stamp — bez invalidace by se po unmark vracel.
+        $this->pdf->invalidate($id, 'invalidate_unmark_paid');
 
         $ip = $this->ipMatcher->clientIpFromRequest($request->getServerParams());
         $this->logger->log('invoice.unmark_paid', $user['id'] ?? null, 'invoice', $id, [

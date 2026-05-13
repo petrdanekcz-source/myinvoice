@@ -278,12 +278,23 @@ final class SettingsAction
             }
         }
 
-        // Currencies + invoice_counters jsou per-supplier — smaž je s ním
+        // Currencies + invoice_counters jsou per-supplier — smaž je s ním.
+        // Pozor: supplier.default_currency_id (NOT NULL) odkazuje na currencies.id,
+        // zároveň currencies.supplier_id odkazuje na supplier.id (cyklický FK,
+        // oba bez ON DELETE). Bez vypnutí FK kontroly nelze cyklus rozbít.
+        // FOREIGN_KEY_CHECKS je session-level — vypneme uvnitř transakce a hned
+        // vrátíme zpět ve finally, aby další requesty na stejném connection
+        // neztratily integritu.
         $pdo->beginTransaction();
         try {
-            $pdo->prepare('DELETE FROM invoice_counters WHERE supplier_id = ?')->execute([$id]);
-            $pdo->prepare('DELETE FROM currencies WHERE supplier_id = ?')->execute([$id]);
-            $pdo->prepare('DELETE FROM supplier WHERE id = ?')->execute([$id]);
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+            try {
+                $pdo->prepare('DELETE FROM invoice_counters WHERE supplier_id = ?')->execute([$id]);
+                $pdo->prepare('DELETE FROM currencies WHERE supplier_id = ?')->execute([$id]);
+                $pdo->prepare('DELETE FROM supplier WHERE id = ?')->execute([$id]);
+            } finally {
+                $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+            }
             $pdo->commit();
         } catch (\Throwable $e) {
             $pdo->rollBack();

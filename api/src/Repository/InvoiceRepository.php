@@ -219,7 +219,8 @@ final class InvoiceRepository
                        i.currency_id, cur.code AS currency, cur.symbol AS currency_symbol, cur.decimals AS currency_decimals,
                        i.total_without_vat, i.total_vat, i.total_with_vat,
                        i.advance_paid_amount, i.amount_to_pay,
-                       i.status, i.sent_at, i.last_reminder_at, i.reminder_count,
+                       i.status, i.payment_method,
+                       i.sent_at, i.last_reminder_at, i.reminder_count,
                        i.paid_at, i.cancelled_at,
                        c.company_name AS client_company_name,
                        p.name AS project_name,
@@ -330,12 +331,17 @@ final class InvoiceRepository
             throw new \InvalidArgumentException('varsymbol má max 20 znaků');
         }
 
+        $paymentMethod = (string) ($data['payment_method'] ?? 'bank_transfer');
+        if (!in_array($paymentMethod, ['bank_transfer', 'card', 'cash', 'other'], true)) {
+            $paymentMethod = 'bank_transfer';
+        }
+
         $sql = 'INSERT INTO invoices
             (invoice_type, parent_invoice_id, client_id, project_id, supplier_id,
              issue_date, tax_date, due_date, currency_id, reverse_charge, language,
              note_above_items, note_below_items, advance_paid_amount, varsymbol,
-             status, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "draft", ?)';
+             payment_method, status, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "draft", ?)';
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
@@ -354,6 +360,7 @@ final class InvoiceRepository
             $data['note_below_items'] ?? null,
             (float) ($data['advance_paid_amount'] ?? 0),
             $manualVarsymbol,
+            $paymentMethod,
             $userId,
         ]);
 
@@ -375,6 +382,15 @@ final class InvoiceRepository
             }
         }
 
+        $hasPaymentMethod = array_key_exists('payment_method', $data);
+        $paymentMethod = null;
+        if ($hasPaymentMethod) {
+            $paymentMethod = (string) $data['payment_method'];
+            if (!in_array($paymentMethod, ['bank_transfer', 'card', 'cash', 'other'], true)) {
+                $paymentMethod = 'bank_transfer';
+            }
+        }
+
         $sql = 'UPDATE invoices SET
                 client_id = ?, project_id = ?,
                 issue_date = ?, tax_date = ?, due_date = ?,
@@ -382,6 +398,7 @@ final class InvoiceRepository
                 note_above_items = ?, note_below_items = ?,
                 advance_paid_amount = ?'
               . ($hasVarsymbol ? ', varsymbol = ?' : '')
+              . ($hasPaymentMethod ? ', payment_method = ?' : '')
               . ' WHERE id = ?';
 
         $params = [
@@ -398,6 +415,7 @@ final class InvoiceRepository
             (float) ($data['advance_paid_amount'] ?? 0),
         ];
         if ($hasVarsymbol) $params[] = $manualVarsymbol;
+        if ($hasPaymentMethod) $params[] = $paymentMethod;
         $params[] = $id;
 
         $this->db->pdo()->prepare($sql)->execute($params);

@@ -90,6 +90,7 @@ const form = ref<{
   note_above_items: string
   note_below_items: string
   advance_paid_amount: number
+  payment_method: 'bank_transfer' | 'card' | 'cash' | 'other'
   exchange_rate: number | null
   varsymbol: string  // Ruční override čísla faktury (prázdný = generuje se při issue)
   items: InvoiceItem[]
@@ -107,6 +108,7 @@ const form = ref<{
   note_above_items: '',
   note_below_items: '',
   advance_paid_amount: 0,
+  payment_method: 'bank_transfer',
   exchange_rate: null,
   varsymbol: '',
   items: [],
@@ -248,6 +250,7 @@ onMounted(async () => {
       note_above_items: inv.note_above_items ?? '',
       note_below_items: inv.note_below_items ?? '',
       advance_paid_amount: inv.advance_paid_amount,
+      payment_method: inv.payment_method ?? 'bank_transfer',
       items: inv.items.map(i => ({ ...i })),
       exchange_rate: inv.exchange_rate ?? null,
       varsymbol: inv.varsymbol ?? '',
@@ -620,6 +623,7 @@ async function submit() {
       note_above_items: form.value.note_above_items || null,
       note_below_items: form.value.note_below_items || null,
       advance_paid_amount: form.value.advance_paid_amount,
+      payment_method: form.value.payment_method,
       // Pošli kurz jen pokud uživatel ho má nastavený a měna není CZK — backend bere
       // explicit hodnotu jako manuální override (nepřepočítá z ČNB).
       exchange_rate: (form.value.currency !== 'CZK' && form.value.exchange_rate && form.value.exchange_rate > 0)
@@ -803,6 +807,18 @@ async function deleteDraft() {
                   <option value="en">EN</option>
                 </select>
               </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('payment_method.label') }}</label>
+              <select v-model="form.payment_method" class="w-full h-10 px-3 border border-neutral-300 rounded-md bg-white">
+                <option value="bank_transfer">{{ t('payment_method.bank_transfer') }}</option>
+                <option value="card">{{ t('payment_method.card') }}</option>
+                <option value="cash">{{ t('payment_method.cash') }}</option>
+                <option value="other">{{ t('payment_method.other') }}</option>
+              </select>
+              <p v-if="form.payment_method !== 'bank_transfer'" class="text-xs text-warning-600 mt-1">
+                {{ t('payment_method.hint') }}
+              </p>
             </div>
             <label v-if="showReverseChargeUI" class="flex items-center gap-2 text-sm text-neutral-700">
               <input v-model="form.reverse_charge" type="checkbox" class="rounded border-neutral-300 text-primary-600" />
