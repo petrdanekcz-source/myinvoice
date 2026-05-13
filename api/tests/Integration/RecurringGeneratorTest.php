@@ -275,6 +275,60 @@ final class RecurringGeneratorTest extends TestCase
         $this->assertNull($data['varsymbol']);
     }
 
+    public function testGeneratorRejectsTemplateWithNonPositiveAmountToPay(): void
+    {
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+
+        $tplId = $this->repo->create([
+            'supplier_id'    => $this->supplierId,
+            'client_id'      => $this->clientId,
+            'name'           => 'TEST recurring invalid discount (PHPUnit)',
+            'frequency'      => 'monthly',
+            'end_of_month'   => false,
+            'anchor_date'    => $today,
+            'next_run_date'  => $today,
+            'invoice_type'   => 'invoice',
+            'currency_id'    => $this->currencyId,
+            'language'       => 'cs',
+            'payment_method' => 'bank_transfer',
+            'payment_due_days' => 7,
+            'increment_month_in_descriptions' => false,
+            'auto_issue'     => false,
+            'auto_send_email'=> false,
+        ], $this->userId);
+        $this->createdTemplateIds[] = $tplId;
+
+        $this->repo->replaceItems($tplId, [
+            [
+                'description' => 'Paušál',
+                'quantity' => 1.0,
+                'unit' => 'h',
+                'unit_price_without_vat' => 1000.00,
+                'vat_rate_id' => $this->vatRateId,
+                'order_index' => 0,
+            ],
+            [
+                'description' => 'Sleva 100 %',
+                'quantity' => 1.0,
+                'unit' => 'h',
+                'unit_price_without_vat' => -1000.00,
+                'vat_rate_id' => $this->vatRateId,
+                'order_index' => 1,
+            ],
+        ]);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Výsledná částka k úhradě musí být větší než 0. Pro čistě záporný nebo nulový doklad použij dobropis.');
+
+        try {
+            $this->generator->generate($tplId, $today, $this->userId, '127.0.0.1', 'phpunit');
+        } finally {
+            $stmt = $this->db->pdo()->prepare('SELECT COUNT(*) FROM invoices WHERE recurring_template_id = ?');
+            $stmt->execute([$tplId]);
+            $this->assertSame(0, (int) $stmt->fetchColumn(), 'Neplatný recurring draft se nesmí uložit.');
+        }
+    }
+
     public function testFindDueIncludesActiveAndSkipsPaused(): void
     {
         $today = (new \DateTimeImmutable('today'))->format('Y-m-d');

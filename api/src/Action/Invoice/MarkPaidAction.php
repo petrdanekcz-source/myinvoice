@@ -13,6 +13,7 @@ use MyInvoice\Service\ActivityLogger;
 use MyInvoice\Service\IpMatcher;
 use MyInvoice\Service\Pdf\InvoicePdfRenderer;
 use MyInvoice\Service\Stats\StatsRecomputer;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -36,6 +37,9 @@ final class MarkPaidAction
         }
         if (!in_array($invoice['status'], ['issued', 'sent', 'reminded'], true)) {
             return Json::error($response, 'invalid_state', 'Lze označit jako zaplacené jen vystavenou nebo odeslanou fakturu.', 409);
+        }
+        if (!InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)) {
+            return Json::error($response, 'invalid_amount', InvoiceAmountPolicy::NON_POSITIVE_MARK_PAID_MESSAGE, 409);
         }
 
         $body = (array) ($request->getParsedBody() ?? []);

@@ -15,6 +15,7 @@ use MyInvoice\Service\IpMatcher;
 use MyInvoice\Service\Mail\InvoiceEmailVarsBuilder;
 use MyInvoice\Service\Mail\Mailer;
 use MyInvoice\Service\Pdf\InvoicePdfRenderer;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -48,6 +49,9 @@ final class SendTestReminderAction
         }
         if (!in_array($invoice['invoice_type'], ['invoice', 'proforma'], true)) {
             return Json::error($response, 'invalid_type', 'Upomínat lze jen běžnou fakturu nebo proformu.', 409);
+        }
+        if (!InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)) {
+            return Json::error($response, 'invalid_amount', InvoiceAmountPolicy::NON_POSITIVE_REMINDER_MESSAGE, 409);
         }
 
         // Test recipient = supplier.email (fallback cfg.smtp.from_email)

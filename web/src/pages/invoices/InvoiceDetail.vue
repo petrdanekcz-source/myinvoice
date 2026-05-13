@@ -252,6 +252,10 @@ async function issue() {
     toast.error( t('invoice.issue_no_items'))
     return
   }
+  if (!canIssueDraft.value) {
+    toast.error(t('invoice.amount_positive_required'))
+    return
+  }
   if (!confirm(t('invoice.issue_confirm'))) return
   busy.value = 'issue'
   try {
@@ -417,10 +421,23 @@ async function sendTestReminder() {
   }
 }
 
+const canIssueDraft = computed(() => {
+  if (!invoice.value) return false
+  if (invoice.value.invoice_type === 'proforma') {
+    return Number(invoice.value.amount_to_pay ?? 0) > 0
+  }
+  if (invoice.value.invoice_type === 'invoice' && invoice.value.parent_invoice_id) {
+    return true
+  }
+  if (invoice.value.invoice_type !== 'invoice') return true
+  return Number(invoice.value.amount_to_pay ?? 0) > 0
+})
+
 const canSendTestReminder = computed(() =>
   invoice.value
   && invoice.value.invoice_type === 'invoice'
   && (invoice.value.payment_method ?? 'bank_transfer') === 'bank_transfer'
+  && Number(invoice.value.amount_to_pay ?? 0) > 0
 )
 
 function openSendModal() {
@@ -459,6 +476,11 @@ const isDraft = computed(() => invoice.value?.status === 'draft')
 const isProforma = computed(() => invoice.value?.invoice_type === 'proforma')
 const canIssueFinal = computed(() => isProforma.value && invoice.value?.status === 'paid')
 const isIssued = computed(() => invoice.value && ['issued', 'sent', 'reminded'].includes(invoice.value.status))
+const hasPositiveAmountToPay = computed(() => {
+  if (!invoice.value) return false
+  if (!['invoice', 'proforma'].includes(invoice.value.invoice_type)) return true
+  return Number(invoice.value.amount_to_pay ?? 0) > 0
+})
 const canCancel = computed(() => invoice.value && ['issued', 'sent', 'reminded', 'paid'].includes(invoice.value.status)
   && invoice.value.invoice_type !== 'cancellation')
 // Dobropisu nelze vystavit další dobropis — v modalu skryjeme tu volbu.
@@ -478,6 +500,7 @@ const canSendReminder = computed(() => {
   if (invoice.value.invoice_type !== 'invoice') return false
   if (!['issued', 'sent', 'reminded'].includes(invoice.value.status)) return false
   if ((invoice.value.payment_method ?? 'bank_transfer') !== 'bank_transfer') return false
+  if (Number(invoice.value.amount_to_pay ?? 0) <= 0) return false
   const due = new Date(invoice.value.due_date)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -520,7 +543,7 @@ const requiresApproval = computed(() =>
 )
 const approvalStatus = computed(() => invoice.value?.approval_status ?? 'none')
 const canRequestApproval = computed(() =>
-  requiresApproval.value && invoice.value?.status === 'draft'
+  requiresApproval.value && invoice.value?.status === 'draft' && canIssueDraft.value
 )
 const approvalTokenExpired = computed(() => {
   if (approvalStatus.value !== 'requested') return false
@@ -650,7 +673,7 @@ async function updateApprovalStatus() {
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 0 0 2.22 0L21 8M5 19h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2z"/></svg>
           {{ busy === 'approval-request' ? '…' : t('invoice.approval.send_request') }}
         </button>
-        <button v-if="isDraft" @click="issue"
+        <button v-if="isDraft && canIssueDraft" @click="issue"
           :disabled="busy !== null || (requiresApproval && approvalStatus !== 'approved')"
           :title="requiresApproval && approvalStatus !== 'approved' ? t('invoice.approval.issue_blocked') : ''"
           class="cursor-pointer px-3 h-9 text-sm bg-primary-600 hover:bg-primary-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white font-medium rounded-md inline-flex items-center gap-1.5">
@@ -689,7 +712,7 @@ async function updateApprovalStatus() {
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 0 0-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
           {{ t('invoice.send_reminder') }}
         </button>
-        <button v-if="isIssued" @click="markPaidOpen = true" :disabled="busy !== null"
+        <button v-if="isIssued && hasPositiveAmountToPay" @click="markPaidOpen = true" :disabled="busy !== null"
           class="cursor-pointer px-3 h-9 text-sm border border-success-500/50 text-success-600 hover:bg-success-50 rounded-md inline-flex items-center gap-1.5">
           <svg class="w-4 h-4 text-success-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
           {{ t('invoice.mark_paid') }}

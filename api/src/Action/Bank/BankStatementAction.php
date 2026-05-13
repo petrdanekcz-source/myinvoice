@@ -17,6 +17,7 @@ use MyInvoice\Service\Bank\StatementMatcher;
 use MyInvoice\Service\Bank\StatementScanner;
 use MyInvoice\Service\Invoice\FinalFromProformaCreator;
 use MyInvoice\Service\IpMatcher;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -282,6 +283,12 @@ final class BankStatementAction
         $invoice = $this->invoices->find($invoiceId);
         if (!SupplierGuard::owns($request, $invoice)) {
             return Json::error($response, 'invoice_not_found', 'Faktura nenalezena.', 404);
+        }
+        if (
+            in_array($invoice['status'], ['issued', 'sent', 'reminded'], true)
+            && !InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)
+        ) {
+            return Json::error($response, 'invalid_amount', InvoiceAmountPolicy::NON_POSITIVE_MARK_PAID_MESSAGE, 409);
         }
 
         $pdo = $this->db->pdo();

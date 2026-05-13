@@ -113,4 +113,19 @@ final class InvoiceMathTest extends TestCase
         self::assertSame(0.00,    $r['totals']['vat']);
         self::assertSame(1000.00, $r['totals']['with_vat']);
     }
+
+    public function testNegativeDiscountLineReducesTotalsAndBreakdown(): void
+    {
+        $r = InvoiceMath::compute([
+            ['quantity' => 1, 'unit_price_without_vat' => 1000.00, 'vat_rate_snapshot' => 21],
+            ['quantity' => 1, 'unit_price_without_vat' => -100.00, 'vat_rate_snapshot' => 21],
+        ]);
+
+        self::assertSame(900.00, $r['totals']['without_vat']);
+        self::assertSame(189.00, $r['totals']['vat']);
+        self::assertSame(1089.00, $r['totals']['with_vat']);
+        self::assertCount(1, $r['vat_breakdown']);
+        self::assertSame(900.00, $r['vat_breakdown'][0]['base']);
+        self::assertSame(189.00, $r['vat_breakdown'][0]['vat']);
+    }
 }

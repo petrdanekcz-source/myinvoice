@@ -11,6 +11,7 @@ use MyInvoice\Service\ActivityLogger;
 use MyInvoice\Service\Currency\ExchangeRateApplier;
 use MyInvoice\Service\Pdf\InvoicePdfRenderer;
 use MyInvoice\Service\Stats\StatsRecomputer;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 
 /**
  * Vygeneruje fakturu ze šablony pravidelné fakturace.
@@ -76,6 +77,14 @@ final class RecurringInvoiceGenerator
 
         $invoiceId = $this->createInvoiceFromTemplate($template, $issueDate, $userId);
         $this->calc->recompute($invoiceId);
+        $invoice = $this->invoices->find($invoiceId);
+        if ($invoice === null) {
+            throw new \RuntimeException("Invoice #$invoiceId not found after generation");
+        }
+        if (!InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)) {
+            $this->invoices->delete($invoiceId);
+            throw new \DomainException(InvoiceAmountPolicy::NON_POSITIVE_DRAFT_MESSAGE);
+        }
         $this->rateApplier->applyToInvoice($invoiceId);
 
         $issued = false;

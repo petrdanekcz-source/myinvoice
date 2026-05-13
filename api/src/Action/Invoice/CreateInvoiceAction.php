@@ -39,7 +39,7 @@ final class CreateInvoiceAction
             return Json::error($response, 'integrity_violation', $e->getMessage(), 400);
         }
 
-        $errors = InvoiceValidation::invoice($body);
+        $errors = InvoiceValidation::invoice($body, $this->repo->vatRateMap());
         if (!empty($errors)) {
             return Json::error($response, 'validation_failed', 'Validace selhala', 400, ['fields' => $errors]);
         }

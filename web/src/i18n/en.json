@@ -248,6 +248,8 @@
     "new_title_credit_note": "New credit note",
     "varsymbol_placeholder": "auto-generated per settings",
     "varsymbol_hint": "Optional manual override. Empty → generated on Issue per Supplier settings → Invoice numbering.",
+    "negative_item_hint": "Enter a discount as a negative quantity or a negative unit price. The final amount due must stay positive.",
+    "amount_positive_required": "Amount due must be greater than 0. Use a credit note for a zero or negative document.",
     "varsymbol_no_template": "No format set — go to Settings → Invoice numbering, or fill in manually.",
     "varsymbol_too_long": "Number is max 20 characters.",
     "new": "+ New invoice",

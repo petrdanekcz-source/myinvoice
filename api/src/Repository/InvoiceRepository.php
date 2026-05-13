@@ -469,6 +469,14 @@ final class InvoiceRepository
         return $out;
     }
 
+    /**
+     * @return array<int, float>
+     */
+    public function vatRateMap(): array
+    {
+        return $this->loadVatRates();
+    }
+
     private function castInvoice(array $row): array
     {
         $row['id']                  = (int) $row['id'];

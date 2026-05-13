@@ -45,6 +45,11 @@ const bulkBusy = ref(false)
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
 
+function hasPositiveAmountToPay(inv: InvoiceListItem): boolean {
+  if (!['invoice', 'proforma'].includes(inv.invoice_type)) return true
+  return Number(inv.amount_to_pay ?? 0) > 0
+}
+
 function toggleSelected(id: number) {
   const i = selectedIds.value.indexOf(id)
   if (i === -1) selectedIds.value.push(id)
@@ -92,6 +97,7 @@ const markPayableSelected = computed(() => {
       ids.has(inv.id)
       && ['issued', 'sent', 'reminded'].includes(inv.status)
       && inv.invoice_type !== 'cancellation'
+      && hasPositiveAmountToPay(inv)
     )
 })
 
@@ -107,6 +113,7 @@ const reminderSelected = computed(() => {
       if (!ids.has(inv.id)) return false
       if (inv.invoice_type !== 'invoice') return false
       if (!['issued', 'sent', 'reminded'].includes(inv.status)) return false
+      if (!hasPositiveAmountToPay(inv)) return false
       if ((inv.payment_method ?? 'bank_transfer') !== 'bank_transfer') return false
       const due = new Date(inv.due_date)
       return due < today
@@ -520,7 +527,7 @@ const monthOptions = computed(() => (tm('common.months_short') as unknown as str
                   </span>
                 </td>
                 <td class="px-4 py-2.5 text-right font-mono">
-                  {{ formatMoney(inv.amount_to_pay || inv.total_with_vat, inv.currency) }}
+                  {{ formatMoney(inv.amount_to_pay ?? inv.total_with_vat, inv.currency) }}
                 </td>
                 <td class="px-4 py-2.5 text-center">
                   <span class="text-xs px-2 py-0.5 rounded" :class="statusBadgeClass(inv.status)">
@@ -558,7 +565,7 @@ const monthOptions = computed(() => (tm('common.months_short') as unknown as str
                 <div class="flex items-baseline justify-between gap-2">
                   <div class="font-medium text-neutral-900 truncate">{{ inv.client_company_name }}</div>
                   <div class="font-mono text-sm font-semibold whitespace-nowrap">
-                    {{ formatMoney(inv.amount_to_pay || inv.total_with_vat, inv.currency) }}
+                    {{ formatMoney(inv.amount_to_pay ?? inv.total_with_vat, inv.currency) }}
                   </div>
                 </div>
                 <div class="flex items-baseline justify-between gap-2 mt-0.5 text-xs text-neutral-500">

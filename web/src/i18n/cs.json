@@ -248,6 +248,8 @@
     "new_title_credit_note": "Nový dobropis",
     "varsymbol_placeholder": "automaticky podle nastavení",
     "varsymbol_hint": "Volitelný ruční override. Prázdné → vygeneruje se při Vystavení dle Nastavení dodavatele → Číslování faktur.",
+    "negative_item_hint": "Slevu zadej záporným množstvím nebo zápornou cenou. Výsledná částka dokladu musí zůstat kladná.",
+    "amount_positive_required": "Výsledná částka k úhradě musí být větší než 0. Pro nulový nebo záporný doklad použij dobropis.",
     "varsymbol_no_template": "Není nastaven žádný formát — jdi do Nastavení → Číslování faktur, nebo vyplň ručně.",
     "varsymbol_too_long": "Číslo má max 20 znaků.",
     "new": "+ Nová faktura",

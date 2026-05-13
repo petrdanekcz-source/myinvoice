@@ -78,6 +78,7 @@ const showReverseChargeUI = computed(() => {
 
 const form = ref<{
   invoice_type: 'invoice' | 'proforma' | 'credit_note'
+  parent_invoice_id: number | null
   client_id: number | null
   project_id: number | null
   issue_date: string
@@ -96,6 +97,7 @@ const form = ref<{
   items: InvoiceItem[]
 }>({
   invoice_type: 'invoice',
+  parent_invoice_id: null,
   client_id: null,
   project_id: null,
   issue_date: today(),
@@ -238,6 +240,7 @@ onMounted(async () => {
       invoice_type: (inv.invoice_type === 'proforma' || inv.invoice_type === 'credit_note')
         ? inv.invoice_type
         : 'invoice',
+      parent_invoice_id: inv.parent_invoice_id,
       client_id: inv.client_id,
       project_id: inv.project_id,
       issue_date: inv.issue_date.slice(0, 10),
@@ -441,6 +444,16 @@ const computed_totals = computed(() => {
   }
 })
 
+const requiresPositiveAmountToPay = computed(() => {
+  if (form.value.invoice_type === 'proforma') return true
+  if (form.value.invoice_type !== 'invoice') return false
+  return !form.value.parent_invoice_id
+})
+
+const hasNonPositiveAmountToPay = computed(() =>
+  requiresPositiveAmountToPay.value && computed_totals.value.amount_to_pay <= 0
+)
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
@@ -606,6 +619,11 @@ async function submit() {
   // Detekce nesouladu mezi výkazem a položkou faktury — uživatel má šanci se vrátit
   const wrWarning = checkWorkReportSync()
   if (wrWarning && !confirm(wrWarning)) return
+
+  if (hasNonPositiveAmountToPay.value) {
+    error.value = t('invoice.amount_positive_required')
+    return
+  }
 
   submitting.value = true
   error.value = ''
@@ -884,6 +902,9 @@ async function deleteDraft() {
             {{ t('invoice.add_item') }}
           </button>
         </div>
+        <div class="px-5 py-3 border-b border-neutral-100 text-xs text-neutral-500">
+          {{ t('invoice.negative_item_hint') }}
+        </div>
         <!-- Desktop: tabulka -->
         <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-sm table-sticky-first">
@@ -910,7 +931,7 @@ async function deleteDraft() {
                   class="w-full px-2 py-1.5 border border-neutral-200 rounded text-sm resize-y min-h-[36px] focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none"></textarea>
               </td>
               <td class="px-3 py-2">
-                <input v-model.number="item.quantity" type="number" step="0.001" min="0"
+                <input v-model.number="item.quantity" type="number" step="0.001"
                   class="w-full h-9 px-2 border border-neutral-200 rounded text-right font-mono text-sm" />
               </td>
               <td class="px-3 py-2">
@@ -920,7 +941,7 @@ async function deleteDraft() {
                 </select>
               </td>
               <td class="px-3 py-2">
-                <input v-model.number="item.unit_price_without_vat" type="number" step="0.01" min="0"
+                <input v-model.number="item.unit_price_without_vat" type="number" step="0.01"
                   class="w-full h-9 px-2 border border-neutral-200 rounded text-right font-mono text-sm" />
               </td>
               <td v-if="supplierIsVatPayer" class="px-3 py-2">
@@ -966,7 +987,7 @@ async function deleteDraft() {
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <label class="block text-xs font-medium text-neutral-600 mb-1">{{ t('invoice.items_table.qty') }}</label>
-                <input v-model.number="item.quantity" type="number" inputmode="decimal" step="0.001" min="0"
+                <input v-model.number="item.quantity" type="number" inputmode="decimal" step="0.001"
                   class="w-full h-10 px-3 border border-neutral-200 rounded text-right font-mono text-sm" />
               </div>
               <div>
@@ -980,7 +1001,7 @@ async function deleteDraft() {
             <div :class="supplierIsVatPayer ? 'grid grid-cols-2 gap-2' : ''">
               <div>
                 <label class="block text-xs font-medium text-neutral-600 mb-1">{{ t('invoice.items_table.unit_price') }}</label>
-                <input v-model.number="item.unit_price_without_vat" type="number" inputmode="decimal" step="0.01" min="0"
+                <input v-model.number="item.unit_price_without_vat" type="number" inputmode="decimal" step="0.01"
                   class="w-full h-10 px-3 border border-neutral-200 rounded text-right font-mono text-sm" />
               </div>
               <div v-if="supplierIsVatPayer">
@@ -1043,6 +1064,9 @@ async function deleteDraft() {
             <div v-if="form.advance_paid_amount > 0" class="flex justify-between text-base font-semibold pt-1">
               <dt>{{ t('invoice.totals.amount_due') }}</dt>
               <dd class="font-mono">{{ formatMoney(computed_totals.amount_to_pay, form.currency) }}</dd>
+            </div>
+            <div v-if="hasNonPositiveAmountToPay" class="rounded-md bg-warning-50 border border-warning-200 px-3 py-2 text-xs text-warning-700 mt-3">
+              {{ t('invoice.amount_positive_required') }}
             </div>
             <div v-if="loadedRate" class="text-xs text-neutral-500 pt-3 border-t border-neutral-200 mt-2">
               {{ t('invoice.czk_recap.rate_info', {

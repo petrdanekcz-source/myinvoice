@@ -366,7 +366,7 @@ async function deleteClient() {
               </span>
             </td>
             <td class="px-4 py-2.5 text-right font-mono">
-              {{ formatMoney(inv.amount_to_pay || inv.total_with_vat, inv.currency) }}
+              {{ formatMoney(inv.amount_to_pay ?? inv.total_with_vat, inv.currency) }}
             </td>
             <td class="px-4 py-2.5 text-center">
               <span class="text-xs px-2 py-0.5 rounded" :class="statusBadgeClass(inv.status)">
@@ -386,7 +386,7 @@ async function deleteClient() {
           <div class="flex items-baseline justify-between gap-2">
             <div class="font-mono font-medium text-neutral-900">{{ inv.varsymbol || `#${inv.id}` }}</div>
             <div class="font-mono text-sm font-semibold whitespace-nowrap">
-              {{ formatMoney(inv.amount_to_pay || inv.total_with_vat, inv.currency) }}
+              {{ formatMoney(inv.amount_to_pay ?? inv.total_with_vat, inv.currency) }}
             </div>
           </div>
           <div class="flex items-baseline justify-between gap-2 mt-1 text-xs text-neutral-500">

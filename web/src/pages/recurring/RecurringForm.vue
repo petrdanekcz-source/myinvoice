@@ -111,6 +111,29 @@ function removeItem(idx: number) {
   form.value.items.splice(idx, 1)
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
+const computedAmountToPay = computed(() => {
+  let totalBase = 0
+  let totalVat = 0
+  for (const item of form.value.items) {
+    const vatRate = form.value.reverse_charge
+      ? 0
+      : vatRates.value.find(v => v.id === item.vat_rate_id)?.rate_percent ?? 0
+    const base = round2((Number(item.quantity) || 0) * (Number(item.unit_price_without_vat) || 0))
+    const vat = round2(base * (vatRate / 100))
+    totalBase += base
+    totalVat += vat
+  }
+  return round2(totalBase + totalVat)
+})
+
+const hasNonPositiveAmountToPay = computed(() =>
+  computedAmountToPay.value <= 0
+)
+
 async function loadProjectsForClient(clientId: number) {
   if (!clientId) {
     projects.value = []
@@ -247,6 +270,10 @@ async function submit() {
   if (form.value.items.length === 0) { error.value = t('recurring.items_required'); return }
   if (form.value.auto_send_email && !form.value.auto_issue) {
     error.value = t('recurring.auto_send_requires_issue')
+    return
+  }
+  if (hasNonPositiveAmountToPay.value) {
+    error.value = t('invoice.amount_positive_required')
     return
   }
 
@@ -427,6 +454,7 @@ async function submit() {
             {{ t('invoice.add_item') }}
           </button>
         </div>
+        <p class="mb-3 text-xs text-neutral-500">{{ t('invoice.negative_item_hint') }}</p>
         <table class="w-full text-sm">
           <thead class="text-xs text-neutral-500">
             <tr>
@@ -462,6 +490,9 @@ async function submit() {
             </tr>
           </tbody>
         </table>
+        <div v-if="hasNonPositiveAmountToPay" class="mt-3 rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-xs text-warning-700">
+          {{ t('invoice.amount_positive_required') }}
+        </div>
       </div>
 
       <!-- Automation -->

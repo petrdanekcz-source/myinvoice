@@ -16,6 +16,7 @@ use MyInvoice\Service\Invoice\VarsymbolGenerator;
 use MyInvoice\Service\IpMatcher;
 use MyInvoice\Service\Pdf\InvoicePdfRenderer;
 use MyInvoice\Service\Stats\StatsRecomputer;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -53,6 +54,15 @@ final class IssueInvoiceAction
         }
         if (count($invoice['items']) === 0) {
             return Json::error($response, 'no_items', 'Faktura musí obsahovat alespoň jednu položku.', 422);
+        }
+        if (
+            InvoiceAmountPolicy::requiresPositiveDraftAmountToPay(
+                (string) ($invoice['invoice_type'] ?? 'invoice'),
+                $invoice['parent_invoice_id'] ?? null,
+            )
+            && !InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)
+        ) {
+            return Json::error($response, 'invalid_amount', InvoiceAmountPolicy::NON_POSITIVE_DRAFT_MESSAGE, 409);
         }
         if ($invoice['invoice_type'] === 'cancellation') {
             return Json::error($response, 'invalid_type', 'Storno nedostává varsymbol.', 422);

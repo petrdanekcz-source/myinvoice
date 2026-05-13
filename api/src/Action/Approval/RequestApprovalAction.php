@@ -17,6 +17,7 @@ use MyInvoice\Service\Mail\ApprovalEmailVarsBuilder;
 use MyInvoice\Service\Mail\Mailer;
 use MyInvoice\Service\Pdf\PdfArchiveService;
 use MyInvoice\Service\Pdf\WorkReportPdfRenderer;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -63,6 +64,15 @@ final class RequestApprovalAction
         }
         if (empty($invoice['project_id']) || !($invoice['project_requires_approval'] ?? false)) {
             return Json::error($response, 'not_required', 'Zakázka nevyžaduje schválení výkazu.', 409);
+        }
+        if (
+            InvoiceAmountPolicy::requiresPositiveDraftAmountToPay(
+                (string) ($invoice['invoice_type'] ?? 'invoice'),
+                $invoice['parent_invoice_id'] ?? null,
+            )
+            && !InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)
+        ) {
+            return Json::error($response, 'invalid_amount', InvoiceAmountPolicy::NON_POSITIVE_DRAFT_MESSAGE, 409);
         }
 
         // Příjemci: project_billing_emails (fallback client_main_email)

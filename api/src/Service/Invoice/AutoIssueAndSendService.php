@@ -13,6 +13,7 @@ use MyInvoice\Service\Mail\Mailer;
 use MyInvoice\Service\Pdf\InvoicePdfRenderer;
 use MyInvoice\Service\Pdf\PdfArchiveService;
 use MyInvoice\Service\Stats\StatsRecomputer;
+use MyInvoice\Service\Validation\InvoiceAmountPolicy;
 
 /**
  * Po schválení výkazu klientem (nebo manuálním přepnutí na 'approved'):
@@ -59,6 +60,15 @@ final class AutoIssueAndSendService
         $issued = false;
         // 1. Vystavit pokud draft
         if ($invoice['status'] === 'draft') {
+            if (
+                InvoiceAmountPolicy::requiresPositiveDraftAmountToPay(
+                    (string) ($invoice['invoice_type'] ?? 'invoice'),
+                    $invoice['parent_invoice_id'] ?? null,
+                )
+                && !InvoiceAmountPolicy::hasPositiveAmountToPay($invoice)
+            ) {
+                throw new \DomainException(InvoiceAmountPolicy::NON_POSITIVE_DRAFT_MESSAGE);
+            }
             // VS + snapshoty — pokud už nebyly alokované předem (request-approval flow),
             // alokuj teď.
             $invoice = $this->allocateVarsymbolAndSnapshots($invoiceId);

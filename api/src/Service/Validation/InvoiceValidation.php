@@ -7,9 +7,10 @@ namespace MyInvoice\Service\Validation;
 final class InvoiceValidation
 {
     /**
+     * @param array<int, float>|null $vatRates
      * @return array<string, string[]>
      */
-    public static function invoice(array $data): array
+    public static function invoice(array $data, ?array $vatRates = null): array
     {
         $err = [];
 
@@ -56,14 +57,21 @@ final class InvoiceValidation
                     $err["items.{$i}.description"][] = 'Popis je povinný';
                 }
                 $qty = (float) ($item['quantity'] ?? 0);
-                if ($qty <= 0) {
-                    $err["items.{$i}.quantity"][] = 'Množství musí být kladné';
+                if ($qty == 0.0) {
+                    $err["items.{$i}.quantity"][] = 'Množství nesmí být 0';
                 }
                 if (!isset($item['vat_rate_id']) || !is_numeric($item['vat_rate_id'])) {
                     $err["items.{$i}.vat_rate_id"][] = 'DPH sazba je povinná';
                 }
                 if (!isset($item['unit_price_without_vat']) || !is_numeric($item['unit_price_without_vat'])) {
                     $err["items.{$i}.unit_price_without_vat"][] = 'Jednotková cena je povinná';
+                } else {
+                    $price = (float) $item['unit_price_without_vat'];
+                    if ($qty < 0 && $price < 0) {
+                        $msg = 'Záporné množství i záporná cena zároveň nejsou povolené';
+                        $err["items.{$i}.quantity"][] = $msg;
+                        $err["items.{$i}.unit_price_without_vat"][] = $msg;
+                    }
                 }
             }
         }
@@ -71,6 +79,13 @@ final class InvoiceValidation
         $advance = (float) ($data['advance_paid_amount'] ?? 0);
         if ($advance < 0) {
             $err['advance_paid_amount'][] = 'Záloha nesmí být záporná';
+        }
+
+        if ($vatRates !== null) {
+            $amountError = InvoiceAmountPolicy::validatePositiveAmountToPay($data, $vatRates);
+            if ($amountError !== null) {
+                $err['amount_to_pay'][] = $amountError;
+            }
         }
 
         // Volitelný manuální varsymbol u draftu (override automatického číslování).

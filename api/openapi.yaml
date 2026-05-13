@@ -2676,9 +2676,9 @@ components:
         id: { type: integer }
         invoice_id: { type: integer }
         description: { type: string }
-        quantity: { type: number, format: float }
+        quantity: { type: number, format: float, description: "Může být záporné pro slevový řádek. Nesmí být 0." }
         unit: { type: string, example: ks }
-        unit_price_without_vat: { type: number, format: float, description: "Jednotková cena bez DPH" }
+        unit_price_without_vat: { type: number, format: float, description: "Jednotková cena bez DPH. Může být záporná pro slevový řádek." }
         vat_rate_id: { type: integer, description: "FK do /codebooks/vat-rates (kontextově k supplierovi)" }
         vat_rate_snapshot:
           type: number
@@ -2697,9 +2697,9 @@ components:
       required: [description, quantity, unit_price_without_vat, vat_rate_id]
       properties:
         description: { type: string }
-        quantity: { type: number, format: float, description: "Musí být kladné" }
+        quantity: { type: number, format: float, description: "Nesmí být 0. Může být záporné pro slevový řádek, ale ne současně se zápornou cenou." }
         unit: { type: string, default: "ks" }
-        unit_price_without_vat: { type: number, format: float, description: "Jednotková cena BEZ DPH" }
+        unit_price_without_vat: { type: number, format: float, description: "Jednotková cena BEZ DPH. Může být záporná pro slevový řádek, ale ne současně se záporným množstvím." }
         vat_rate_id: { type: integer, description: "FK do /codebooks/vat-rates (kontextově k supplierovi)" }
         order_index: { type: integer, description: "Pořadí v rámci faktury. Default = pozice v poli." }
 
@@ -2763,9 +2763,9 @@ components:
             properties:
               id: { type: integer }
               description: { type: string }
-              quantity: { type: number, format: float }
+              quantity: { type: number, format: float, description: "Může být záporné pro slevový řádek. Nesmí být 0." }
               unit: { type: string }
-              unit_price_without_vat: { type: number, format: float }
+              unit_price_without_vat: { type: number, format: float, description: "Může být záporná pro slevový řádek." }
               vat_rate_id: { type: integer }
               vat_rate_percent: { type: number, format: float }
               order_index: { type: integer }
@@ -2812,8 +2812,8 @@ components:
             required: [description, quantity, unit_price_without_vat, vat_rate_id]
             properties:
               description: { type: string }
-              quantity: { type: number, format: float }
+              quantity: { type: number, format: float, description: "Nesmí být 0. Může být záporné pro slevový řádek, ale ne současně se zápornou cenou." }
               unit: { type: string, default: ks }
-              unit_price_without_vat: { type: number, format: float }
+              unit_price_without_vat: { type: number, format: float, description: "Může být záporná pro slevový řádek, ale ne současně se záporným množstvím." }
               vat_rate_id: { type: integer }
               order_index: { type: integer }
