@@ -138,6 +138,15 @@ final class EmailBrandingAction
      */
     public function preview(Request $request, Response $response): Response
     {
+        // Admin role guard — preview čte soubor z disku přes file_get_contents
+        // a vrací bytes base64-encoded v inline `<img>`. Bez tohohle guardu by readonly
+        // user mohl exfiltrovat libovolný soubor, který admin předem podstrčil přes
+        // logo_path mass-assign (CWE-915 + CWE-538, security report @andrejtomci #2).
+        // Mass-assign na logo_path je už uzavřený v SettingsAction, ale tohle je
+        // druhá vrstva — preview je čistě admin funkce (live edit brandingu).
+        if (!$this->isAdmin($request)) {
+            return Json::error($response, 'forbidden', 'Pouze admin smí prohlížet branding.', 403);
+        }
         $sid = (int) $request->getAttribute(SupplierScopeMiddleware::ATTR_CURRENT_ID, 0);
         if ($sid <= 0) {
             return Json::error($response, 'no_supplier', 'Žádný supplier scope.', 400);
@@ -181,8 +190,10 @@ final class EmailBrandingAction
         $supplier['logo_display_width']  = null;
         $supplier['logo_display_height'] = null;
         if ($supplier['logo_path']) {
-            $abs = Bootstrap::rootDir() . '/' . ltrim((string) $supplier['logo_path'], '/');
-            if (is_file($abs)) {
+            // SafeLogoPath: validuje že path je `storage/supplier-logos/sup-{sid}.{ext}`,
+            // realpath neutekl mimo, extension v allowlistu (viz security report #2).
+            $abs = \MyInvoice\Service\Mail\SafeLogoPath::resolve((string) $supplier['logo_path'], $sid);
+            if ($abs !== null) {
                 $bytes = (string) @file_get_contents($abs);
                 if ($bytes !== '') {
                     $supplier['logo_inline_src'] = 'data:image/png;base64,' . base64_encode($bytes);

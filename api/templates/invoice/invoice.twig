@@ -22,7 +22,7 @@
   <tr>
     <td class="logo">
       {% if logo_path and logo_path is not empty %}
-        <img src="{{ logo_path }}" alt="logo">
+        <img src="{{ logo_path }}" alt="logo" style="max-width: 72mm; max-height: 20mm;">
       {% else %}
         <div class="brand-name">{{ supplier.company_name }}</div>
       {% endif %}
@@ -392,7 +392,7 @@
   <tr>
     <td class="logo">
       {% if logo_path and logo_path is not empty %}
-        <img src="{{ logo_path }}" alt="logo">
+        <img src="{{ logo_path }}" alt="logo" style="max-width: 72mm; max-height: 20mm;">
       {% else %}
         <div class="brand-name">{{ supplier.company_name }}</div>
       {% endif %}

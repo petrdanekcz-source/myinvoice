@@ -220,9 +220,43 @@ final class BankStatementAction
         return Json::ok($response, $s);
     }
 
+    /**
+     * Ověří, že bank_transaction patří aktuálnímu supplier-i (přes statement.account_number
+     * → currencies.account_number/supplier_id). Vrací true / false; nevyhazuje výjimku,
+     * caller pak vrátí 404.
+     *
+     * Sjednocený check pro všechny mutující ops na bank_transactions (match/ignore/unmatch).
+     * Bez tohoto guardu by accountant z S1 mohl měnit transakce S2 (CWE-639 BOLA, security
+     * report @andrejtomci #1).
+     */
+    private function txBelongsToCurrentSupplier(Request $request, int $txId): bool
+    {
+        $sid = SupplierGuard::currentId($request);
+        if ($sid <= 0 || $txId <= 0) return false;
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT bt.id
+               FROM bank_transactions bt
+               JOIN bank_statements bs ON bs.id = bt.statement_id
+              WHERE bt.id = ?
+                AND EXISTS (
+                    SELECT 1 FROM currencies cur
+                     WHERE cur.supplier_id = ?
+                       AND TRIM(LEADING '0' FROM REGEXP_REPLACE(IFNULL(cur.account_number, ''), '[^0-9]', ''))
+                         = TRIM(LEADING '0' FROM REGEXP_REPLACE(IFNULL(bs.account_number, ''),  '[^0-9]', ''))
+                       AND (bs.bank_code IS NULL OR cur.bank_code IS NULL OR cur.bank_code = bs.bank_code)
+                )"
+        );
+        $stmt->execute([$txId, $sid]);
+        return $stmt->fetchColumn() !== false;
+    }
+
     public function manualMatch(Request $request, Response $response, array $args): Response
     {
         $txId = (int) ($args['id'] ?? 0);
+        if (!$this->txBelongsToCurrentSupplier($request, $txId)) {
+            return Json::error($response, 'not_found', 'Transakce nenalezena.', 404);
+        }
+
         $body = (array) ($request->getParsedBody() ?? []);
         $invoiceId = (int) ($body['invoice_id'] ?? 0);
         $varsymbol = trim((string) ($body['varsymbol'] ?? ''));
@@ -322,6 +356,10 @@ final class BankStatementAction
     public function unmatch(Request $request, Response $response, array $args): Response
     {
         $txId = (int) ($args['id'] ?? 0);
+        if (!$this->txBelongsToCurrentSupplier($request, $txId)) {
+            return Json::error($response, 'not_found', 'Transakce nenalezena.', 404);
+        }
+
         $pdo = $this->db->pdo();
 
         $stmt = $pdo->prepare(
@@ -429,10 +467,20 @@ final class BankStatementAction
     public function ignore(Request $request, Response $response, array $args): Response
     {
         $txId = (int) ($args['id'] ?? 0);
+        if (!$this->txBelongsToCurrentSupplier($request, $txId)) {
+            return Json::error($response, 'not_found', 'Transakce nenalezena.', 404);
+        }
+
         $pdo = $this->db->pdo();
-        $stmt = $pdo->prepare('SELECT statement_id FROM bank_transactions WHERE id = ?');
-        $stmt->execute([$txId]);
-        $statementId = (int) $stmt->fetchColumn();
+        // Načti previous state pro audit log (před UPDATE)
+        $prev = $pdo->prepare(
+            'SELECT statement_id, match_status, matched_invoice_id FROM bank_transactions WHERE id = ?'
+        );
+        $prev->execute([$txId]);
+        $prevRow = $prev->fetch(\PDO::FETCH_ASSOC) ?: [];
+        $statementId = (int) ($prevRow['statement_id'] ?? 0);
+        $previousStatus = (string) ($prevRow['match_status'] ?? '');
+        $previousInvoiceId = $prevRow['matched_invoice_id'] !== null ? (int) $prevRow['matched_invoice_id'] : null;
 
         $pdo->prepare("UPDATE bank_transactions SET match_status = 'ignored' WHERE id = ?")->execute([$txId]);
 
@@ -448,6 +496,15 @@ final class BankStatementAction
                   WHERE id = ?"
             )->execute([$statementId, $statementId]);
         }
+
+        // Audit log — destructive op musí být dohledatelná (forensic integrity).
+        $userId = (int) (((array) $request->getAttribute(AuthMiddleware::ATTR_USER, []))['id'] ?? 0);
+        $ip = $this->ipMatcher->clientIpFromRequest($request->getServerParams());
+        $this->logger->log('bank.tx_ignore', $userId ?: null, 'bank_transaction', $txId, [
+            'previous_status'     => $previousStatus,
+            'previous_invoice_id' => $previousInvoiceId,
+        ], $ip, $request->getHeaderLine('User-Agent'));
+
         return Json::ok($response, ['ignored' => true]);
     }
 }

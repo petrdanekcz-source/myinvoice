@@ -134,6 +134,9 @@ final class ExportAction
                     default        => 'Faktura',
                 };
                 $vs = $inv['varsymbol'] ?? ('draft-' . $id);
+                // Sanitize ZIP entry name — defense-in-depth proti zip-slip přes
+                // importovaný varsymbol (security report @andrejtomci #3 DiD).
+                $vs = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) $vs);
                 $zip->addFile($path, "$typeLabel-$vs.pdf");
             } catch (\Throwable) { /* skip failing ones */ }
         }

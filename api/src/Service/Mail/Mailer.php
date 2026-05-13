@@ -118,9 +118,13 @@ final class Mailer
         if ($supplier !== null
             && !empty($supplier['email_branding_enabled'])
             && !empty($supplier['logo_path'])
+            && !empty($supplier['id'])
         ) {
-            $logoAbs = Bootstrap::rootDir() . '/' . ltrim((string) $supplier['logo_path'], '/');
-            if (is_file($logoAbs)) {
+            // SafeLogoPath: defense-in-depth proti LFI přes podstrčený logo_path
+            // (security report @andrejtomci #2). Resolve vrátí null pokud cesta
+            // neukazuje do storage/supplier-logos/sup-{id}.{png|svg|...}.
+            $logoAbs = SafeLogoPath::resolve((string) $supplier['logo_path'], (int) $supplier['id']);
+            if ($logoAbs !== null) {
                 $email->embedFromPath($logoAbs, 'supplier_logo', 'image/png');
             }
         }
@@ -325,7 +329,7 @@ final class Mailer
 
         try {
             $stmt = $this->db->pdo()->prepare(
-                'SELECT s.company_name, s.display_name, s.tagline, s.street, s.city, s.zip,
+                'SELECT s.id, s.company_name, s.display_name, s.tagline, s.street, s.city, s.zip,
                         s.email, s.phone, s.web,
                         s.email_branding_enabled, s.email_accent_color, s.logo_path,
                         co.name_cs AS country
@@ -361,11 +365,12 @@ final class Mailer
         $supplier['logo_display_width']  = null;
         $supplier['logo_display_height'] = null;
 
-        if (empty($supplier['email_branding_enabled']) || empty($supplier['logo_path'])) {
+        if (empty($supplier['email_branding_enabled']) || empty($supplier['logo_path']) || empty($supplier['id'])) {
             return $supplier;
         }
-        $abs = Bootstrap::rootDir() . '/' . ltrim((string) $supplier['logo_path'], '/');
-        if (!is_file($abs)) return $supplier;
+        // SafeLogoPath: viz security report @andrejtomci #2
+        $abs = SafeLogoPath::resolve((string) $supplier['logo_path'], (int) $supplier['id']);
+        if ($abs === null) return $supplier;
 
         $info = @getimagesize($abs);
         if ($info === false || (int) $info[1] === 0) return $supplier;

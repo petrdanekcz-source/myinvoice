@@ -189,7 +189,11 @@ final class SettingsAction
             'company_name', 'display_name', 'street', 'city', 'zip', 'country_id',
             'ic', 'dic', 'is_vat_payer', 'email', 'phone', 'web', 'tagline', 'commercial_register',
             'default_currency_id', 'default_vat_rate_id', 'default_payment_due_days',
-            'default_hourly_rate', 'auto_send_reminders', 'auto_generate_recurring', 'logo_path', 'signature_path',
+            // logo_path / signature_path se NIKDY nemění přes mass-assignment — jen přes
+            // dedikované endpointy EmailBrandingAction::uploadLogo (multipart, processed by
+            // SupplierLogoConverter do storage/branding/sup-N/). Mass-assign by umožnil
+            // admin-planted LFI (security report @andrejtomci #2).
+            'default_hourly_rate', 'auto_send_reminders', 'auto_generate_recurring',
             'pohoda_account_code', 'pohoda_centre_code', 'pohoda_activity_code', 'pohoda_contract_code',
             // Per-supplier konfigurace číslování faktur (migrace 0014)
             'invoice_number_format', 'proforma_number_format', 'credit_note_number_format',

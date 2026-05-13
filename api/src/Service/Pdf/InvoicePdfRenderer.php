@@ -178,7 +178,7 @@ final class InvoicePdfRenderer
             return $locale === 'en' ? $en : $cs;
         }));
 
-        $logoPath = $this->resolveLogoPath($supplierData);
+        $logoPath = $this->resolveLogoPath($supplierData, (int) ($invoice['supplier_id'] ?? 0));
 
         return $twig->render('invoice.twig', [
             'invoice'           => $invoice,
@@ -313,7 +313,7 @@ final class InvoicePdfRenderer
         return $stmt->fetchColumn() ?: null;
     }
 
-    private function resolveLogoPath(array $supplier): ?string
+    private function resolveLogoPath(array $supplier, int $supplierIdFallback = 0): ?string
     {
         // Logo se v PDF zobrazí jen když má dodavatel zapnutý branding
         // (`email_branding_enabled` = 1). Pokud je toggle vypnutý, vykreslí se
@@ -324,16 +324,48 @@ final class InvoicePdfRenderer
         $logoPath = $supplier['logo_path'] ?? null;
         if (!$logoPath) return null;
 
-        // Pro PDF preferuj SVG sidecar (vektor = crisp v PDF v libovolném zoomu).
-        // Email naopak vždy používá PNG (Outlook/Gmail SVG nepodporují) — tam to
-        // řeší Mailer + InvoiceEmailVarsBuilder.
-        $abs = is_file($logoPath) ? $logoPath : Bootstrap::rootDir() . '/' . ltrim($logoPath, '/');
-        $svgSibling = preg_replace('/\.png$/i', '.svg', $abs);
-        if (is_string($svgSibling) && $svgSibling !== $abs && is_file($svgSibling)) {
-            return $svgSibling;
+        // SafeLogoPath: defense-in-depth proti podstrčenému logo_path (security
+        // report @andrejtomci #2). Mass-assign už je zavřený, ale tohle je 2.
+        // vrstva pro případ legacy snapshotu s bad-value nebo jiné cesty vstupu.
+        // Pokud snapshot postrádá `id`, použijeme fallback z invoice.supplier_id.
+        $supplierId = (int) ($supplier['id'] ?? $supplierIdFallback);
+        $abs = \MyInvoice\Service\Mail\SafeLogoPath::resolve((string) $logoPath, $supplierId);
+        if ($abs === null) return null;
+
+        // V PDF preferujeme SVG sidecar (vektor = crisp v libovolném zoomu/tisku);
+        // PNG je fallback pokud SVG chybí nebo obsahuje mPDF-nekompatibilní prvky.
+        //
+        // mPDF SVG renderer má známé limity: `<clipPath>`, `<use xlink:href>`,
+        // `<mask>`, `<linearGradient>`, `<radialGradient>`, `<pattern>` a `<filter>`
+        // se často vykreslí černým fillem nebo posunutě. Adobe Illustrator export
+        // tohle používá běžně. U takových SVG fallneme na PNG (rasterizovaný
+        // SupplierLogoConverterem s alfa kanálem = transparentní pozadí).
+        // Email vždy používá PNG (Outlook/Gmail SVG nepodporují) — to řeší
+        // Mailer + InvoiceEmailVarsBuilder, ne tahle metoda.
+        $svgSibling = preg_replace('/\.png$/i', '.svg', (string) $logoPath);
+        if (is_string($svgSibling) && $svgSibling !== $logoPath) {
+            $svgAbs = \MyInvoice\Service\Mail\SafeLogoPath::resolve($svgSibling, $supplierId);
+            if ($svgAbs !== null && $this->svgIsMpdfCompatible($svgAbs)) {
+                return $svgAbs;
+            }
         }
-        return is_file($abs) ? $abs : null;
+        return $abs;
     }
+
+    /**
+     * Detekce SVG features, které mPDF neumí korektně vykreslit.
+     * Pokud SVG obsahuje něco z {clipPath, use, mask, gradient, pattern, filter},
+     * vrátíme false → caller fallne na PNG variantu.
+     */
+    private function svgIsMpdfCompatible(string $svgPath): bool
+    {
+        $svg = (string) @file_get_contents($svgPath);
+        if ($svg === '') return false;
+        // Známé problematické features v mPDF SVG rendereru
+        $bad = '/<(?:clipPath|use|mask|linearGradient|radialGradient|pattern|filter)\b/i';
+        return !preg_match($bad, $svg);
+    }
+
 
     /**
      * Resnapshot supplier/client/bank z live dat a uloží do invoices. Volá se při
@@ -441,6 +473,11 @@ final class InvoicePdfRenderer
         $dir = $rootDir . '/storage/invoices/sup-' . $supplierId . '/' . $issueDate->format('Y-m');
 
         $vs = $invoice['varsymbol'] ?? ('draft-' . $invoice['id']);
+        // Sanitize varsymbol pro filesystem — defense-in-depth proti path traversal
+        // přes importovaný varsymbol (security report @andrejtomci #3 — `varsymbol`
+        // se sice už validuje na vstupu ImportService::processOne, ale tady je to
+        // belt-and-braces pro případ legacy řádků v DB nebo jiných cest vstupu).
+        $vs = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) $vs);
         $type = match ($invoice['invoice_type']) {
             'proforma'     => 'Proforma',
             'credit_note'  => 'Dobropis',

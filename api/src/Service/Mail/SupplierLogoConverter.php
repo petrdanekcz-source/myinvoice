@@ -248,9 +248,15 @@ final class SupplierLogoConverter
     private function sanitizeSvg(string $svg): string
     {
         if ($svg === '') return '';
-        // XML XXE: odstraň DOCTYPE/ENTITY definice
+        // XML XXE: odstraň DOCTYPE i s internal subset (Adobe Illustrator typicky
+        // exportuje `<!DOCTYPE svg PUBLIC "..." "..." [ <!ENTITY ns_X "..."> ... ]>`
+        // — `[^>]*` by se ukousnul na první `>` uvnitř ENTITY decl. Použijeme
+        // greedy match přes `]>` pokud existuje, jinak fallback na `>`).
+        $svg = (string) preg_replace('/<!DOCTYPE[^>\[]*\[[^\]]*\]\s*>/is', '', $svg);
         $svg = (string) preg_replace('/<!DOCTYPE[^>]*>/is', '', $svg);
         $svg = (string) preg_replace('/<!ENTITY[^>]*>/is', '', $svg);
+        // Orphan internal subset closers (`]>`) z DOCTYPE bez subjektu
+        $svg = (string) preg_replace('/^\s*\]\s*>\s*/m', '', $svg);
         // Skript a foreignObject elementy (i s obsahem)
         $svg = (string) preg_replace('#<script\b[^>]*>.*?</script\s*>#is', '', $svg);
         $svg = (string) preg_replace('#<foreignObject\b[^>]*>.*?</foreignObject\s*>#is', '', $svg);
@@ -260,6 +266,32 @@ final class SupplierLogoConverter
         // External href (data: URI nechat — base64 obrázek je OK)
         $svg = (string) preg_replace('/\s+(?:xlink:)?href\s*=\s*"(?!#|data:)[^"]*"/i', '', $svg);
         $svg = (string) preg_replace("/\s+(?:xlink:)?href\s*=\s*'(?!#|data:)[^']*'/i", '', $svg);
+        // Orphan xmlns entity refs (`xmlns:x="&ns_extend;"` apod. — DOCTYPE/ENTITY
+        // pryč, ale namespace deklarace zůstaly. Bez nich mPDF SVG parser umírá
+        // a vykresluje černé pozadí.) Najdeme všechny "broken" prefixy a kromě
+        // xmlns deklarace stripneme i všechny `<prefix:el>...</prefix:el>` a
+        // `prefix:attr="..."` použití (XML parser jinak vyhodí "Namespace prefix
+        // X is not defined" warning při dalším parsování).
+        $brokenPrefixes = [];
+        if (preg_match_all('/\bxmlns:(\w+)\s*=\s*["\']&\w+;["\']/i', $svg, $mm)) {
+            $brokenPrefixes = array_unique($mm[1]);
+        }
+        // Stripni xmlns:X="&Y;" deklarace
+        $svg = (string) preg_replace('/\s+xmlns:\w+\s*=\s*["\']&\w+;["\']/i', '', $svg);
+        // Stripni `<prefix:el ...>...</prefix:el>` (self-closing i párové) a
+        // `prefix:attr="..."` na všech tagech pro každý broken prefix.
+        foreach ($brokenPrefixes as $p) {
+            $pq = preg_quote($p, '/');
+            // Párové: `<p:el ...>...</p:el>` (greedy přes řádky)
+            $svg = (string) preg_replace('#<' . $pq . ':[a-zA-Z][\w-]*\b[^>]*>.*?</' . $pq . ':[a-zA-Z][\w-]*\s*>#is', '', $svg);
+            // Self-closing: `<p:el ... />`
+            $svg = (string) preg_replace('#<' . $pq . ':[a-zA-Z][\w-]*\b[^>]*/>#is', '', $svg);
+            // Otevírací bez ukončení (orphan): `<p:el ...>`
+            $svg = (string) preg_replace('#<' . $pq . ':[a-zA-Z][\w-]*\b[^>]*>#is', '', $svg);
+            // Atributy `p:attr="..."` nebo `p:attr='...'` na zachovaných tagech
+            $svg = (string) preg_replace('/\s+' . $pq . ':[a-zA-Z][\w-]*\s*=\s*"[^"]*"/i', '', $svg);
+            $svg = (string) preg_replace("/\s+" . $pq . ":[a-zA-Z][\w-]*\s*=\s*'[^']*'/i", '', $svg);
+        }
         // Final sanity check — must still contain <svg
         return preg_match('/<svg[\s>]/i', $svg) ? $svg : '';
     }

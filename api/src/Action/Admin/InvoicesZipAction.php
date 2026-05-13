@@ -100,7 +100,9 @@ final class InvoicesZipAction
                     'cancellation' => 'Storno',
                     default        => 'Faktura',
                 };
-                $entryName = "$type-{$inv['varsymbol']}.pdf";
+                // Sanitize ZIP entry name (zip-slip DiD, security report @andrejtomci #3)
+                $vs = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) $inv['varsymbol']);
+                $entryName = "$type-$vs.pdf";
                 $zip->addFile($path, $entryName);
             } catch (\Throwable $e) {
                 $errors++;

@@ -8,6 +8,7 @@ use MyInvoice\Http\Json;
 use MyInvoice\Http\SupplierGuard;
 use MyInvoice\Middleware\AuthMiddleware;
 use MyInvoice\Repository\InvoiceRepository;
+use MyInvoice\Repository\ProjectRepository;
 use MyInvoice\Repository\WorkReportRepository;
 use MyInvoice\Service\ActivityLogger;
 use MyInvoice\Service\IpMatcher;
@@ -24,6 +25,7 @@ final class SaveWorkReportAction
     public function __construct(
         private readonly InvoiceRepository $invoices,
         private readonly WorkReportRepository $repo,
+        private readonly ProjectRepository $projects,
         private readonly ActivityLogger $logger,
         private readonly IpMatcher $ipMatcher,
         private readonly InvoicePdfRenderer $pdf,
@@ -56,6 +58,22 @@ final class SaveWorkReportAction
 
         if ($title === '') {
             return Json::error($response, 'validation_failed', 'Chybí název výkazu.', 400);
+        }
+
+        // Project ownership check — varianta MS-P1-1 (Invoice→Project) pro WR edge.
+        // Bez tohohle by accountant z S1 mohl uložit WR s project_id ze S2 — cross-tenant
+        // FK drift v `work_reports.project_id` (security report @andrejtomci #4, CWE-639 BOLA).
+        if ($projectId !== null) {
+            $project = $this->projects->find($projectId);
+            if (!SupplierGuard::owns($request, $project)) {
+                return Json::error($response, 'validation_failed',
+                    'Zakázka neexistuje nebo nepatří k aktuálnímu dodavateli.', 400);
+            }
+            // Belt-and-braces: project musí patřit i ke stejnému klientovi jako faktura.
+            if ((int) ($project['client_id'] ?? 0) !== (int) ($invoice['client_id'] ?? 0)) {
+                return Json::error($response, 'validation_failed',
+                    'Zakázka nepatří k odběrateli této faktury.', 400);
+            }
         }
 
         // Validace — popisujeme řádky 1-based (uživatelsky srozumitelné). Frontend

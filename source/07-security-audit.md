@@ -425,3 +425,145 @@
   malformed XML, foreign currency).
 
 **Test:** 147 PHPUnit testů (290 assertions), všechny zelené (+15 nových).
+
+---
+
+# Třetí externí audit (2026-05-13) — security report @andrejtomci
+
+Externí code review nahlášené uživatelem **[@andrejtomci](https://github.com/andrejtomci)**
+proti `v3.3.1-2-gfaeeacf`. Pack `c:/tmp/security/` obsahoval 4 reports
++ PoC artefakty (sanitizované, reprodukovatelné na lokálním Docker stacku).
+Všechny 4 nálezy ověřené jako reálné v `v3.5.0` a opravené v `v3.5.1`.
+
+## P0 — Kritické
+
+### TA-P0-1 — Cross-tenant bank-transaction tamper + forensic blindness  ✅ *(fixed v3.5.1)*
+- **CVSS 3.1:** 8.1 High — `AV:N/AC:L/PR:L/UI:N/S:C/C:L/I:H/A:L`
+- **CWE:** 639 (BOLA) + 285 (Improper Authorization) + 778 (Insufficient Logging)
+- **Soubory:** `api/src/Action/Bank/BankStatementAction.php`
+  - `manualMatch:248` — jen invoice ownership check; `txId` z URL bez supplier scope
+  - `ignore:429` — žádný ownership check, žádný `activity_log` write
+  - `unmatch:322` — scope check projde přes attacker-linked invoice
+- **Útok:** `accountant` z tenanta S1 přes 4 curl příkazy spáruje cizí
+  bank-tx S2 se svou fakturou (→ S2 invoice se označí jako paid, forged tax
+  doc z proformy), nebo tiše `ignore` cizí incoming customer payment
+  (bez audit logu → S2 admin nezjistí, kdo to udělal).
+- **Fix:** Nový privátní helper `txBelongsToCurrentSupplier()` v
+  `BankStatementAction` — JOIN `bank_transactions → bank_statements → currencies`
+  ověří, že tx patří current supplier (přes účet supplier-a, mirror logiky
+  z `list()` a `detail()`). Volaný hned na začátku `manualMatch`, `unmatch`,
+  `ignore`. Plus `ignore` teď zapisuje `bank.tx_ignore` action do
+  `activity_log` s `previous_status` + `previous_invoice_id` (forensic trace).
+
+### TA-P0-2 — Arbitrary local file read via `logo_path` mass-assignment  ✅ *(fixed v3.5.1)*
+- **CVSS 3.1:** 6.2 High — `AV:N/AC:L/PR:H/UI:N/S:C/C:H/I:N/A:N`
+- **CWE:** 915 (Mass Assignment) + 22 (Path Traversal) + 285 + 538 (Information Exposure)
+- **Soubory:**
+  - `api/src/Action/Settings/SettingsAction.php:192` — mass-assign whitelist obsahuje `logo_path`, `signature_path`
+  - `api/src/Action/Settings/EmailBrandingAction.php:139-197` — `preview` čte `file_get_contents($supplier['logo_path'])`, bez admin role guardu, vrací bytes base64 v inline `<img>` data: URI
+  - `api/src/Service/Mail/Mailer.php:117-126` — parity sink přes `embedFromPath` (off-box exfil přes MIME attachment)
+- **Útok (chain):** malicious / compromised admin podstrčí
+  `logo_path = "cfg.php"` přes mass-assign na PUT `/api/settings/supplier`.
+  Pak **libovolný auth user** (i `readonly`!) zavolá `GET /api/settings/email-branding/preview`
+  a vyparsne bytes `cfg.php` z `<img src="data:image/png;base64,...">` HTML
+  odpovědi. Leakne `app.pepper`, `secret_encryption_key` (defeat 2FA system-wide),
+  `db.password` (direct MariaDB connection bypasses tenant scope), SMTP creds.
+- **Fix:**
+  - `logo_path` + `signature_path` **odebrány z `$allowed` mass-assign whitelistu**.
+    Logo se mění jen přes dedikovaný `EmailBrandingAction::uploadLogo` (multipart
+    upload → `SupplierLogoConverter` → fixed path `storage/supplier-logos/sup-{ID}.png`).
+  - `EmailBrandingAction::preview` má teď `if (!$this->isAdmin($request))` guard.
+  - Nový helper `\MyInvoice\Service\Mail\SafeLogoPath::resolve()` validuje cestu
+    proti pattern `storage/supplier-logos/sup-{ID}.{png|jpg|jpeg|svg|webp}` s
+    `realpath()` rejection mimo `storage/supplier-logos/`, null-byte + `..`
+    traversal rejection, foreign-supplier-id rejection. Použito ve 4 sinks:
+    - `Mailer::sendTemplate` (embedFromPath)
+    - `Mailer::addLogoDisplaySize` (getimagesize)
+    - `EmailBrandingAction::preview` (file_get_contents)
+    - `InvoicePdfRenderer::resolveLogoPath` (PDF render)
+
+## P1 — Vysoká
+
+### TA-P1-1 — HTML injection v outbound emailu přes `{{ intro|raw }}` + neomezený varsymbol  ✅ *(fixed v3.5.1)*
+- **CVSS 3.1:** 5.4 Medium — `AV:N/AC:L/PR:L/UI:R/S:C/C:L/I:L/A:N`
+- **CWE:** 20 (Improper Input Validation) + 79 (HTML Injection v emailu; ne stored XSS — JS se v moderních mail klientech nevykonává)
+- **Soubory:**
+  - `api/src/Service/Import/InvoiceImportService.php:163` — `processOne()` neaplikuje `InvoiceValidation::invoice()` ani charset whitelist na varsymbol z ISDOC/Pohoda XML
+  - `api/src/Service/Mail/InvoiceEmailVarsBuilder.php:72-78` — `intro` skládán s embedovaným `<strong>č. {VS}</strong>`
+  - `api/templates/email/invoice_send.{cs,en}.html.twig:8` — `{{ intro|raw }}` bypassuje Twig autoescape
+  - **Parity sinks (DiD):** PDF cache filenamy, ZIP entry names, CSV cells
+- **Útok:** `accountant` z libovolného tenanta uploadne ISDOC s
+  `<inv:symVar><a href=//attacker.tld></inv:symVar>` (16 znaků = fitne do
+  `VARCHAR(20)`). Po `POST /api/invoices/{id}/send` dostane klient
+  DKIM-podepsaný email z legitimního MTA supplier-a, kde unclosed `<a>`
+  udělá phishing link z celého zbytku těla emailu. Trust-laundering přes
+  cizí DKIM authority.
+- **Fix:**
+  - **Gateway**: `InvoiceImportService::processOne()` validuje varsymbol
+    proti `^[A-Za-z0-9_-]{1,20}$` — neplatný varsymbol → import řádek
+    skončí `failed`.
+  - **Sink**: šablony `invoice_send.{cs,en}.html.twig:8` přepsané z
+    `{{ intro|raw }}` na `{{ intro_prefix }} <strong>č. {{ invoice.varsymbol }}</strong>.`
+    — `intro_prefix` je plain text z PHP, `<strong>` static v šabloně,
+    `varsymbol` projde Twig autoescape (HTML entities). EN šablona používá
+    `No.` místo `č.` (preexistující i18n bug, vyřešený u příležitosti fixu).
+  - **DiD na parity sinks**: `InvoicePdfRenderer::cachePath` +
+    `WorkReportPdfRenderer` sanitizují varsymbol pro filesystem
+    (`preg_replace('/[^A-Za-z0-9_-]/', '_', $vs)`); `ExportAction` +
+    `InvoicesZipAction` totéž pro ZIP entry names; `ExportCsvAction`
+    escape OWASP CSV formula injection (prefix `'` u buněk začínajících
+    `=/+/-/@/TAB/CR`).
+
+## P2 — Střední
+
+### TA-P2-1 — WorkReport cross-supplier `project_id` (parity miss MS-P1-1)  ✅ *(fixed v3.5.1)*
+- **CVSS 3.1:** 4.3 Medium — `AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N`
+- **CWE:** 639 (BOLA) + 285 + 915
+- **Soubor:** `api/src/Action/WorkReport/SaveWorkReportAction.php:36, 50-53, 81`
+- **Problém:** `SupplierGuard::owns($request, $invoice)` ověří jen parent
+  invoice; `project_id` z body se předává na `WorkReportRepository::save()`
+  bez validace, že project patří ke stejnému supplier. Parity-miss audit
+  fixu **MS-P1-1** (Invoice→Project edge), který tuhle samou anti-pattern
+  zavřel v `CreateInvoiceAction`/`UpdateInvoiceAction` přes
+  `InvoiceDefaults::resolve()`.
+- **Útok (latentní):** `accountant` z S1 uloží `work_reports` řádek s
+  `project_id` ze S2 (FK constraint chybí v `wr.project_id` — je jen
+  `bigint unsigned NULL, MUL`). Dnes silent (žádný API endpoint nepivotuje
+  na `wr.project_id`), ale latentní pro budoucí aggregátor (project revenue,
+  hours-per-project, budget burn-down) → mis-attribuce hodin přes tenant boundary.
+- **Fix:** Inject `ProjectRepository` do `SaveWorkReportAction`. Po
+  invoice scope checku přidaná validace:
+  ```php
+  if ($projectId !== null) {
+      $project = $this->projects->find($projectId);
+      if (!SupplierGuard::owns($request, $project)) {
+          return Json::error($response, 'validation_failed',
+              'Zakázka neexistuje nebo nepatří k aktuálnímu dodavateli.', 400);
+      }
+      if ((int) $project['client_id'] !== (int) $invoice['client_id']) {
+          return Json::error($response, 'validation_failed',
+              'Zakázka nepatří k odběrateli této faktury.', 400);
+      }
+  }
+  ```
+
+## Implementace fixů (2026-05-13) — souhrn
+
+- [x] **TA-P0-1** — Bank tx supplier scope check + audit log na ignore
+- [x] **TA-P0-2** — `logo_path` mass-assign drop + SafeLogoPath helper + admin guard
+- [x] **TA-P1-1** — varsymbol charset whitelist + Twig autoescape pro `intro` + DiD parity sinks
+- [x] **TA-P2-1** — WorkReport project supplier scope check
+
+## Nové PHPUnit testy
+
+- `SafeLogoPathTest` — 8 unit testů (path traversal rejection, null byte,
+  wrong prefix, wrong supplier_id, wrong extension, missing file)
+- `SecurityFixesTest` — 8 integration testů (regression guards — kód
+  inspection že fixy zůstávají uzamknuté: bank tx scope check ve všech
+  3 metodách, audit log na ignore, no `intro|raw` v šablonách, varsymbol
+  regex v ImportService, no `logo_path` v mass-assign, ProjectRepository
+  v SaveWorkReportAction, SafeLogoPath v PDF rendereru)
+
+**Test:** 241 PHPUnit testů (~520 assertions), všechny zelené (+16 nových).
+Plus regression guard struktura — pokud někdo v budoucnu znovu otevře jeden
+z těchto sinkú, testy ho chytí v CI.

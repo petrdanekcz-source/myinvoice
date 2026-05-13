@@ -14,8 +14,9 @@ declare(strict_types=1);
  * Maže: users, sessions, password_resets, login_attempts, api_tokens,
  *       supplier, clients, projects, invoices, work_reports, activity_log,
  *       bank_statements, invoice_counters, invoice_pdfs (PDF historie),
- *       invoice_attachments, app_meta (version cache), ares_cache, vies_cache
- *       (volitelně), email_templates, project/client revenue cache,
+ *       invoice_attachments, recurring_invoice_templates + _items
+ *       (pravidelné fakturace), app_meta (version cache), ares_cache,
+ *       vies_cache (volitelně), email_templates, project/client revenue cache,
  *       currencies (per-supplier!)
  *
  * Pozn.: currencies jsou per-supplier (multi-tenant), takže s ním padají.
@@ -96,6 +97,8 @@ $wipe = [
     'invoice_items',
     'invoice_pdfs',                  // PDF historie (cascade by ji vzal s invoices, ale TRUNCATE FK ignoruje)
     'invoice_attachments',           // uživatelské přílohy faktur
+    'recurring_invoice_template_items',  // child před parentem (FK + ON DELETE CASCADE)
+    'recurring_invoice_templates',   // šablony pravidelných faktur (FK → invoices nullified, viz fk_inv_recurring)
     'invoices',
     'invoice_counters',
     'project_revenue_cache',

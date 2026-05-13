@@ -54,12 +54,21 @@ final class ExportCsvAction
             'VS', 'Typ', 'Klient', 'Zakázka', 'Vystaveno', 'DUZP', 'Splatnost',
             'Měna', 'Bez DPH', 'DPH', 'Celkem', 'K úhradě', 'Stav', 'Zaplaceno',
         ], ';', '"', '\\');
+        // CSV cell sanitizer — OWASP CSV injection guard: prefix `'` u buněk
+        // začínajících `=`, `+`, `-`, `@`, TAB, CR; jinak Excel po double-click
+        // interpretuje obsah jako vzorec (`=cmd|'/c calc'!A1` apod.). Účetní,
+        // co soubor otevře, je v tomhle scénáři self-shoot, ale prevence je
+        // levná (security report @andrejtomci #3 DiD).
+        $csvSafe = static function ($v): string {
+            $s = (string) ($v ?? '');
+            return preg_replace('/^([=+\-@\t\r])/u', "'\\1", $s) ?? $s;
+        };
         foreach ($rows as $r) {
             fputcsv($fp, [
-                $r['varsymbol'] ?? '',
-                $r['invoice_type'] ?? '',
-                $r['client_company_name'] ?? '',
-                $r['project_name'] ?? '',
+                $csvSafe($r['varsymbol'] ?? ''),
+                $csvSafe($r['invoice_type'] ?? ''),
+                $csvSafe($r['client_company_name'] ?? ''),
+                $csvSafe($r['project_name'] ?? ''),
                 $r['issue_date'] ?? '',
                 $r['tax_date'] ?? '',
                 $r['due_date'] ?? '',

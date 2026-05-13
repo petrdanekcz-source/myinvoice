@@ -69,19 +69,31 @@ final class InvoiceEmailVarsBuilder
             default       => $locale === 'en' ? 'invoice' : 'fakturu',
         };
 
+        // Pozn.: dříve se `intro` skládal s embedovaným <strong>č. {VS}</strong> a v šabloně
+        // se renderoval `{{ intro|raw }}` — to bypassovalo Twig autoescape a umožnilo HTML
+        // injection přes varsymbol importovaný z ISDOC/Pohoda (security report @andrejtomci
+        // #3). Teď posíláme `intro_prefix` jako plain text + varsymbol jako separátní vars
+        // ve šablonách (kde projde autoescape). `intro` ponecháno pro zpětnou kompatibilitu
+        // s případnými custom šablonami v supplier_email_templates, ale šablony v repu už
+        // ho nepoužívají.
         if ($locale === 'en') {
             $greeting = 'Hello,';
-            $intro = "we're sending you {$typeLabel} <strong>č. {$varsymbol}</strong>.";
-            $intro_plain = "we're sending you {$typeLabel} č. {$varsymbol}.";
+            $intro_prefix = "we're sending you {$typeLabel}";
+            $intro_plain = "we're sending you {$typeLabel} No. {$varsymbol}.";
         } else {
             $greeting = 'Dobrý den,';
-            $intro = "v příloze posíláme {$typeLabel} <strong>č. {$varsymbol}</strong>.";
+            $intro_prefix = "v příloze posíláme {$typeLabel}";
             $intro_plain = "v příloze posíláme {$typeLabel} č. {$varsymbol}.";
         }
+        // Legacy `intro` value — autoescape-safe (žádné raw <strong>); custom email
+        // template overrides v DB mohou používat `{{ intro }}` (bez |raw) a dostanou
+        // escapovaný text. Nikdy nepoužívat `{{ intro|raw }}` v nových šablonách.
+        $intro = $intro_plain;
 
         return [
             'greeting'       => $greeting,
             'intro'          => $intro,
+            'intro_prefix'   => $intro_prefix,
             'intro_plain'    => $intro_plain,
             'invoice'        => $invoice,
             'client_name'    => $invoice['client_company_name'] ?? '',
@@ -200,7 +212,7 @@ final class InvoiceEmailVarsBuilder
         $sid = (int) ($invoice['supplier_id'] ?? 0);
         if ($row === null && $sid > 0) {
             $stmt = $this->db->pdo()->prepare(
-                'SELECT s.company_name, s.display_name, s.tagline, s.street, s.city, s.zip,
+                'SELECT s.id, s.company_name, s.display_name, s.tagline, s.street, s.city, s.zip,
                         s.email, s.phone, s.web, co.name_cs AS country
                    FROM supplier s
               LEFT JOIN countries co ON co.id = s.country_id
@@ -209,6 +221,11 @@ final class InvoiceEmailVarsBuilder
             $stmt->execute([$sid]);
             $live = $stmt->fetch(\PDO::FETCH_ASSOC);
             $row = $live ?: null;
+        }
+        // Ensure id present pro SafeLogoPath ve sink stages (Mailer::sendTemplate +
+        // addLogoDisplaySize). Když row vznikl ze snapshotu, sid může chybět.
+        if ($row !== null && empty($row['id']) && $sid > 0) {
+            $row['id'] = $sid;
         }
 
         // 3. Branding (logo, accent color, toggle) — vždy LIVE z aktuálního supplier,

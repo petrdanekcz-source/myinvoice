@@ -164,6 +164,19 @@ final class InvoiceImportService
     {
         $varsymbol = (string) $inv['varsymbol'];
 
+        // Charset whitelist — varsymbol importovaný z ISDOC/Pohoda XML protéká do
+        // emailových šablon, PDF cache filenamů, ZIP entry names a CSV cell. Bez
+        // omezení by ISDOC `<inv:symVar><a href=//evil></inv:symVar>` zaškodil
+        // (HTML injection v emailu, CSV formula injection apod. — viz security
+        // report @andrejtomci #3). Povolené znaky: A-Z, a-z, 0-9, _ a `-`,
+        // max 20 znaků (= DB column limit).
+        if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $varsymbol)) {
+            return [
+                'status' => 'failed',
+                'reason' => "Neplatný varsymbol '{$varsymbol}' (povoleno: A-Z, a-z, 0-9, _, -; max 20 znaků).",
+            ];
+        }
+
         // Duplicate check
         $stmt = $this->db->pdo()->prepare(
             'SELECT id FROM invoices WHERE supplier_id = ? AND varsymbol = ? LIMIT 1'

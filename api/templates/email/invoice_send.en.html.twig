@@ -5,7 +5,7 @@
   {% if is_test %}<span style="color:#E8A547;">[TEST] </span>{% endif %}{{ greeting }}
 </h1>
 
-<p style="margin:0 0 16px;">{{ intro|raw }}</p>
+<p style="margin:0 0 16px;">{{ intro_prefix }} <strong>No. {{ invoice.varsymbol }}</strong>.</p>
 
 <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#F4F2FB;border-radius:8px;margin:16px 0;">
   <tr>

@@ -9,6 +9,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.5.1] — 2026-05-13
+
+### Security
+
+Bezpečnostní release zaměřený na 4 nálezy z externí code review.
+**Reportoval [@andrejtomci](https://github.com/andrejtomci)** — díky za detailní
+reports s reprodukčními kroky a navrhovanými opravami.
+
+- **High (8.1) — Cross-tenant bank transaction tamper (CWE-639 BOLA + CWE-778
+  insufficient logging).** `BankStatementAction::manualMatch`, `unmatch`
+  a `ignore` ověřovaly jen invoice ownership (resp. nic); `txId` z URL
+  nebyl scopovaný na supplier. Authenticated `accountant` z S1 mohl napárovat
+  / odpárovat / tiše „ignore" bank-tx S2 (a navíc `ignore` nezapisoval do
+  `activity_log` — silent destructive op).
+  - Přidán helper `txBelongsToCurrentSupplier()` který přes JOIN
+    `bank_transactions → bank_statements → currencies` ověří, že transakce
+    patří aktuálnímu supplier-i (přes účet supplier-a). Všechny 3 mutující
+    metody (`manualMatch`, `unmatch`, `ignore`) ho teď volají hned na začátku.
+  - `ignore` teď zapisuje `bank.tx_ignore` action do `activity_log` s
+    `previous_status` a `previous_invoice_id` (forensic trace).
+
+- **High (6.2) — Arbitrary local file read via `logo_path` mass-assignment
+  (CWE-915 + CWE-22 + CWE-538).** `SettingsAction::updateSupplierById` měl
+  `logo_path` a `signature_path` v mass-assign whitelistu bez validace
+  cesty. `EmailBrandingAction::preview` neměl admin role guard a četl
+  `file_get_contents($supplier['logo_path'])` → base64 v inline `<img>`
+  data: URI. Pre-existing chain: admin (malicious nebo compromised) podstrčí
+  cestu → libovolný auth user (i `readonly`) si přečte `cfg.php` →
+  exfiltruje `app.pepper`, `secret_encryption_key`, `db.password`, SMTP creds.
+  - `logo_path` a `signature_path` odebrány z mass-assign whitelistu
+    v `SettingsAction`. Logo lze měnit jen přes `EmailBrandingAction::uploadLogo`
+    (multipart upload procházející `SupplierLogoConverter`).
+  - `EmailBrandingAction::preview` má teď admin role guard (defense-in-depth
+    pro případ jiné cesty plant).
+  - Nový helper `\MyInvoice\Service\Mail\SafeLogoPath::resolve()` validuje
+    cestu: musí být `storage/supplier-logos/sup-{ID}.{png|svg|jpg|...}`,
+    extension allowlist, `realpath()` rejection mimo `storage/supplier-logos/`,
+    žádné null bytes / `..` traversal. Použito v 3 sinks: `Mailer::sendTemplate`
+    (`embedFromPath`), `Mailer::addLogoDisplaySize` (`getimagesize`),
+    `EmailBrandingAction::preview` (`file_get_contents`).
+
+- **Medium (5.4) — HTML injection v outbound emailu přes importovaný
+  `varsymbol` + `{{ intro|raw }}` (CWE-20 + CWE-79).** `InvoiceImportService`
+  neaplikoval `InvoiceValidation::invoice()` ani charset whitelist na
+  varsymbol z ISDOC/Pohoda XML. `InvoiceEmailVarsBuilder::build` skládal
+  `intro` jako string s embedovaným `<strong>č. {VS}</strong>` a šablony
+  `invoice_send.{cs,en}.html.twig:8` ho renderovaly přes `{{ intro|raw }}` —
+  bypass Twig autoescape. Útočník (`accountant` z libovolného tenanta) mohl
+  nahrát fakturu s varsymbolem `<a href=//evil.tld>` (16 znaků = fitne do
+  `VARCHAR(20)`) a klient pak dostal DKIM-podepsaný e-mail s útočníkovým
+  HTML — phishing-laundering přes legitimní mail-from authority. JS se
+  v moderních mail klientech neexecutuje (stripping), takže to není stored
+  XSS, ale realistický phishing primitive.
+  - **Gateway fix**: `InvoiceImportService::processOne` validuje varsymbol
+    proti `^[A-Za-z0-9_-]{1,20}$` — neplatný varsymbol → import řádek
+    `failed` s důvodem.
+  - **Sink fix**: šablony už nepoužívají `{{ intro|raw }}`. Místo toho
+    `<p>{{ intro_prefix }} <strong>č. {{ invoice.varsymbol }}</strong>.</p>`
+    kde `intro_prefix` je plain text z PHP, `<strong>` static markup
+    v šabloně a `varsymbol` projde Twig autoescape (HTML entities). EN
+    šablona používá `No.` místo `č.`.
+  - **Defense-in-depth na parity sinks**: `InvoicePdfRenderer::cachePath` +
+    `WorkReportPdfRenderer` filesystem path (sanitize `[^A-Za-z0-9_-]` →
+    `_`); ZIP entry names v `ExportAction` + `InvoicesZipAction` (zip-slip);
+    CSV cell escaping v `ExportCsvAction` (OWASP formula injection guard:
+    prefix `'` u buněk začínajících `=`, `+`, `-`, `@`, TAB, CR).
+
+- **Medium (4.3) — WorkReport cross-supplier `project_id` (parity miss
+  MS-P1-1, CWE-639).** `SaveWorkReportAction` ověřoval invoice ownership
+  ale `project_id` z body předával na `WorkReportRepository::save()` bez
+  scope checku. Accountant z S1 mohl uložit work_reports řádek s
+  `project_id` ze S2 (silent FK drift; žádný API endpoint dnes nepivotuje
+  na `wr.project_id`, takže to je latentní problém pro budoucí
+  aggregátory). Fix mirruje MS-P1-1 (Invoice→Project edge): inject
+  `ProjectRepository`, validace `SupplierGuard::owns($request, $project)`
+  + belt-and-braces check `project.client_id == invoice.client_id`.
+
+### Internal
+
+- Nový integration test `SecurityFixesTest` (8 testů, ~30 assertions)
+  ověřuje že každý fix je trvale uzamknutý (regression guard).
+- Nový unit test `SafeLogoPathTest` (8 testů) pokrývá rejection cases —
+  traversal, null bytes, wrong prefix, wrong supplier_id, wrong extension.
+- Celkem testů: **240** (197 unit + 43 integration).
+
+---
+
 ## [3.5.0] — 2026-05-13
 
 ### Added

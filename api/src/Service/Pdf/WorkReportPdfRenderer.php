@@ -98,6 +98,8 @@ final class WorkReportPdfRenderer
         if (!is_dir($dir)) @mkdir($dir, 0755, true);
 
         $vs = $invoice['varsymbol'] ?: ('draft-' . $invoice['id']);
+        // Sanitize filesystem-bezpečně (security report @andrejtomci #3 DiD)
+        $vs = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) $vs);
         $path = "$dir/Vykaz-$vs.pdf";
 
         $tmpPath = $path . '.new';
