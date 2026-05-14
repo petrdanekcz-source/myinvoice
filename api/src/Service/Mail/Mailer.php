@@ -290,7 +290,13 @@ final class Mailer
     private function sandboxedTwig(): Environment
     {
         if ($this->sandboxTwig === null) {
-            $allowedTags = ['if', 'for', 'set', 'spaceless'];
+            // `extends`/`block`/`use` musí být povoleny — uložená DB šablona dědí
+            // z `_layout.html.twig` (viz EmailTemplateAction::loadDefaults, který
+            // vrátí celé tělo včetně `{% extends %}{% block content %}`).
+            // Tyto tagy jsou čistě strukturální (nespouští PHP) a FilesystemLoader
+            // je rooted v `templates/email/`, takže nelze přes ně načíst soubor mimo.
+            // Issue #25 — bez `block` selže render po každé editaci šablony.
+            $allowedTags = ['if', 'for', 'set', 'spaceless', 'extends', 'block', 'use'];
             $allowedFilters = [
                 'escape', 'e', 'raw', 'default', 'date', 'number_format',
                 'upper', 'lower', 'capitalize', 'title', 'trim', 'replace',

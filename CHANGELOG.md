@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [3.6.5] — 2026-05-14
+
+### Fixed
+
+- **Email šablona — render selhával po jakékoli úpravě
+  ([#25](https://github.com/radekhulan/myinvoice/issues/25)).** Po editaci
+  šablony v `/admin/email-templates` (DB override) selhalo odeslání chybou
+  `Tag "block" is not allowed in "_layout.html.twig" at line 63.`. Sandbox
+  v `Mailer::sandboxedTwig()` neumožňoval `block`/`extends`/`use`, takže
+  rendering DB šablony, která dědí z `_layout.html.twig`, byl odmítnut.
+  Tyto tagy jsou čistě strukturální a `FilesystemLoader` je rooted v
+  `api/templates/email/`, takže jejich povolení neotvírá SSTI vektor.
+  Doplněn unit test `MailerSandboxRenderTest`.
+
+---
+
 ## [3.6.4] — 2026-05-14
 
 ### Added
