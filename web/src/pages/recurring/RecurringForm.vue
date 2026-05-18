@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { recurringApi, type RecurringTemplate, type RecurringTemplatePayload, type Frequency } from '@/api/recurring'
-import { clientsApi, type Client } from '@/api/clients'
+import { clientsApi, type Client, type ViesLookupResult } from '@/api/clients'
 import { projectsApi, type Project } from '@/api/projects'
 import { codebooksApi, type VatRate, type Currency, type Unit } from '@/api/codebooks'
 import { useToast } from '@/composables/useToast'
@@ -159,6 +159,27 @@ async function loadProjectsForClient(clientId: number) {
   projects.value = await projectsApi.listForClient(clientId)
 }
 
+// VIES ověření DIČ vybraného klienta (jen pokud má DIČ) — zrcadlí InvoiceEditor.
+const viesResult = ref<{ status: 'checking' | 'valid' | 'invalid' | 'no_dic' | 'error'; dic?: string; name?: string; message?: string } | null>(null)
+
+async function verifyClientVies(clientId: number) {
+  const c = clients.value.find(cc => cc.id === clientId)
+  if (!c) { viesResult.value = null; return }
+  const dic = (c.dic || '').trim()
+  if (!dic) { viesResult.value = { status: 'no_dic' }; return }
+  viesResult.value = { status: 'checking', dic }
+  try {
+    const r: ViesLookupResult = await clientsApi.lookupVies(dic)
+    if (r.valid) {
+      viesResult.value = { status: 'valid', dic, name: r.name }
+    } else {
+      viesResult.value = { status: 'invalid', dic, message: r.source === 'error' ? t('invoice.vies.service_unavailable') : t('invoice.vies.not_valid') }
+    }
+  } catch (e: any) {
+    viesResult.value = { status: 'error', dic, message: e?.response?.data?.error?.message || t('invoice.vies.verify_error') }
+  }
+}
+
 watch(() => form.value.client_id, async (newId) => {
   if (newId) {
     await loadProjectsForClient(newId)
@@ -172,8 +193,10 @@ watch(() => form.value.client_id, async (newId) => {
         form.value.payment_due_days = c.payment_due_default
       }
     }
+    await verifyClientVies(newId)
   } else {
     projects.value = []
+    viesResult.value = null
   }
 })
 
@@ -428,6 +451,26 @@ async function submit() {
                 </svg>
                 <span class="hidden sm:inline">{{ t('client.new_title') }}</span>
               </button>
+            </div>
+            <!-- VIES výsledek — zrcadlí InvoiceEditor -->
+            <div v-if="viesResult" class="mt-1 text-xs flex items-start gap-1.5">
+              <template v-if="viesResult.status === 'checking'">
+                <span class="text-neutral-500">{{ t('invoice.vies.checking', { dic: viesResult.dic }) }}</span>
+              </template>
+              <template v-else-if="viesResult.status === 'valid'">
+                <svg class="w-4 h-4 text-success-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                <span class="text-success-600">{{ t('invoice.vies.valid', { dic: viesResult.dic }) }}<span v-if="viesResult.name" class="text-neutral-500"> — {{ viesResult.name }}</span></span>
+              </template>
+              <template v-else-if="viesResult.status === 'invalid'">
+                <svg class="w-4 h-4 text-danger-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                <span class="text-danger-500">{{ t('common.dic') }} <span class="font-mono">{{ viesResult.dic }}</span>: {{ viesResult.message }}</span>
+              </template>
+              <template v-else-if="viesResult.status === 'error'">
+                <span class="text-warning-600">⚠ {{ viesResult.message }}</span>
+              </template>
+              <template v-else-if="viesResult.status === 'no_dic'">
+                <span class="text-neutral-400">{{ t('invoice.vies.no_dic') }}</span>
+              </template>
             </div>
           </div>
           <div>

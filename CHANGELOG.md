@@ -34,6 +34,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   syntaktickou chybu (`Chyba syntaxe (řádek N): …`). Uživatel tak vidí
   problém okamžitě v adminu, místo aby narazil na runtime crash teprve
   při odeslání emailu — follow-up issue #25.
+- **Hromadné „Vystavit" pro koncepty** v seznamu faktur. Nová bulk akce
+  v `/invoices` umožňuje označit více konceptů a jedním kliknutím je
+  vystavit. Pořadí vystavení respektuje `issue_date`, aby varsymboly
+  zůstaly sekvenční (žádný „přeskakovaný" var. symbol uvnitř dávky).
+- **Automatický přepočet splatnosti** v editoru faktury a v pravidelné
+  fakturaci:
+  - **InvoiceEditor:** u draftu/nové faktury při změně **Vystaveno**
+    přepočti **Splatnost** podle defaultu klienta nebo zakázky
+    (zakázka přebíjí klienta).
+  - **RecurringForm:** po výběru klienta převzít jeho
+    `payment_due_default`; následný výběr zakázky přebije projektovou
+    hodnotou. V edit módu se hodnota uložené šablony při hydrataci
+    nepřepisuje.
+- **VIES kontrola DIČ klienta v editoru pravidelné fakturace.** Stejná
+  validace jako v `InvoiceEditor` — po výběru klienta se DIČ ověří proti
+  VIES a uživatel hned vidí, jestli je platné, neplatné, klient DIČ nemá,
+  nebo VIES služba odpověděla chybou. Zrcadlí `verifyClientVies()`
+  v `InvoiceEditor.vue`.
 
 ### Fixed
 
@@ -42,6 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   řádků pro CZK a EUR). Renderovalo se přes `<span v-for>` bez oddělovače;
   částky vedle používají `<div v-for>` se `space-y-0.5`, counts to teď
   zrcadlí.
+- **Dashboard — cash-flow forecast hint: nepřeložený `due_date`** v textu
+  („Z neuhrazených faktur s due_date v daném okně.") → „se splatností"
+  v `cs`, „due date" v `en`.
+- **Pravidelná fakturace — přepočet `next_run_date` při editaci šablony,
+  která ještě neběžela.** `RecurringTemplateRepository::update()` nikdy
+  nepřepisoval `next_run_date` — ten se nastavil jen jednou při create
+  (= `anchor_date`). Když uživatel editoval šablonu před prvním
+  spuštěním (změna `end_of_month` / `day_of_month` / `anchor_date`),
+  první generování zůstalo viset na původní hodnotě. Pro šablony
+  s `last_run_date` necháváme cyklus naplánovaný (posouvá ho
+  `PeriodicityCalculator` po každém generování).
 
 ---
 
