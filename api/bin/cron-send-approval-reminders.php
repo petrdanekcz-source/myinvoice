@@ -33,6 +33,7 @@ use MyInvoice\Infrastructure\Config\Config;
 use MyInvoice\Infrastructure\Database\Connection;
 use MyInvoice\Repository\InvoiceRepository;
 use MyInvoice\Service\ActivityLogger;
+use MyInvoice\Service\Cron\CronRun;
 use MyInvoice\Service\Mail\ApprovalEmailVarsBuilder;
 use MyInvoice\Service\Mail\Mailer;
 use MyInvoice\Service\Pdf\PdfArchiveService;
@@ -72,6 +73,8 @@ $logger = $container->get(ActivityLogger::class);
 /** @var PdfArchiveService $pdfArchive */
 $pdfArchive = $container->get(PdfArchiveService::class);
 
+$run = CronRun::start($conn->pdo(), 'cron-send-approval-reminders');
+
 $days = $daysOverride ?? (int) $config->get('approval.reminder_after_days', 5);
 $maxReminders = (int) $config->get('approval.max_reminders', 3);
 $ccSupplier = (bool) $config->get('approval.cc_supplier_on_approval_reminder', true);
@@ -103,6 +106,7 @@ if (empty($candidates)) {
     $ms = (int) ((microtime(true) - $startedAt) * 1000);
     echo "  (nothing to do, {$ms} ms)\n";
     $logger->log('cron.approval_reminders', null, null, null, $report);
+    $run->finish('ok', $report);
     exit(0);
 }
 
@@ -193,3 +197,5 @@ $ms = (int) ((microtime(true) - $startedAt) * 1000);
 echo "  done ({$ms} ms): sent={$report['sent']}, errors={$report['errors']}\n";
 
 $logger->log('cron.approval_reminders', null, null, null, $report);
+
+$run->finish($report['errors'] > 0 ? 'error' : 'ok', $report);

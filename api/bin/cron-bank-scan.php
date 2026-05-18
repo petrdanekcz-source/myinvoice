@@ -22,14 +22,18 @@ use MyInvoice\Service\Bank\GpcParser;
 use MyInvoice\Service\Bank\StatementImporter;
 use MyInvoice\Service\Bank\StatementMatcher;
 use MyInvoice\Service\Bank\StatementScanner;
+use MyInvoice\Service\Cron\CronRun;
 
 $rootDir = Bootstrap::rootDir();
 $config  = Config::load($rootDir);
 $conn    = new Connection($config);
 
+$run = CronRun::start($conn->pdo(), 'cron-bank-scan');
+
 $scanRoot = (string) $config->get('bank_import.scan_root', '');
 if ($scanRoot === '' || !is_dir($scanRoot)) {
     fwrite(STDERR, "[bank-scan] cfg.bank_import.scan_root neexistuje: " . ($scanRoot ?: '(prázdné)') . "\n");
+    $run->finish('ok', ['skipped' => 'scan_root not configured', 'scan_root' => $scanRoot]);
     exit(0);
 }
 
@@ -47,3 +51,5 @@ echo "[" . date('Y-m-d H:i:s') . "] bank-scan ({$ms} ms): " . json_encode($summa
 $conn->pdo()->prepare(
     "INSERT INTO activity_log (action, payload) VALUES ('cron.bank_scan', ?)"
 )->execute([json_encode($summary, JSON_UNESCAPED_UNICODE)]);
+
+$run->finish('ok', is_array($summary) ? $summary : ['summary' => $summary]);

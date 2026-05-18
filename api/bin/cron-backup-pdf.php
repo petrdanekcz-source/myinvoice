@@ -15,16 +15,22 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use MyInvoice\Bootstrap;
 use MyInvoice\Infrastructure\Config\Config;
+use MyInvoice\Infrastructure\Database\Connection;
+use MyInvoice\Service\Cron\CronRun;
 
 $rootDir = Bootstrap::rootDir();
 $config  = Config::load($rootDir);
 $dbName  = (string) $config->get('db.name');
 
+$run = CronRun::start((new Connection($config))->pdo(), 'cron-backup-pdf');
+
 $backupDir = $rootDir . '/storage/backup';
 if (!is_dir($backupDir)) @mkdir($backupDir, 0755, true);
 
 if (!class_exists(ZipArchive::class)) {
-    fwrite(STDERR, "PHP ext-zip není nainstalována.\n");
+    $msg = 'PHP ext-zip není nainstalována.';
+    fwrite(STDERR, "$msg\n");
+    $run->finish('error', null, $msg, 1);
     exit(1);
 }
 
@@ -56,6 +62,7 @@ foreach ($sources as $src) {
 
 if (count($pdfs) === 0) {
     echo "[" . date('Y-m-d H:i:s') . "] backup-pdf: žádné PDF k záloze (storage/invoices/ ani storage/work-reports/ neobsahuje .pdf).\n";
+    $run->finish('ok', ['files' => 0, 'note' => 'no PDFs to back up']);
     exit(0);
 }
 
@@ -93,6 +100,8 @@ $size = round(filesize($file) / 1024, 1);
 $count = count($pdfs);
 echo "[" . date('Y-m-d H:i:s') . "] backup-pdf: " . basename($file) . " ({$count} souborů, {$size} KB)\n";
 
+$report = ['file' => basename($file), 'files' => $count, 'size_kb' => $size];
+
 // Retention: smaž PDF zálohy starší 30 dní (1. v měsíci drž 365 dní).
 // Filtrujeme jen vlastní prefix "{dbName}-pdf-", aby se nedotklo DB dumpů.
 $prefix = $dbName . '-pdf-';
@@ -106,5 +115,8 @@ foreach ($files as $f) {
     if ($age > $maxAge) {
         @unlink($f);
         echo "  - retention: smazáno " . basename($f) . "\n";
+        $report['retention_purged'] = ($report['retention_purged'] ?? 0) + 1;
     }
 }
+
+$run->finish('ok', $report);

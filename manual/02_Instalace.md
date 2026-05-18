@@ -590,3 +590,12 @@ V `cmd/` jsou připravené `.cmd` (Windows Task Scheduler) i `.sh` (Linux cron) 
 | `cron-send-reminders` | 1× denně 09:00, Po–Pá |
 
 Detaily v `cmd/README.md`.
+
+**Kontrola, že úlohy běží:** otevři v aplikaci **Systém → Plánované úlohy**.
+Každý cron skript si zapisuje vlastní heartbeat do tabulky `cron_runs`
+(start, konec, exit code, JSON report). Stránka ukazuje pro každou
+doporučenou úlohu kdy naposled úspěšně proběhla, a pokud poslední běh
+chybí nebo je starší než `max_age_hours` (typicky 36 h), je tu varování
+**Stáří** / **Selhává** / **Neběželo**. Tím se odhalí "cron vůbec není
+nastavený" i "cron běží, ale failuje" — bez ohledu na OS (crontab vs.
+Task Scheduler vs. Docker host).

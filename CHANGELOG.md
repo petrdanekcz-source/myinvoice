@@ -7,8 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.6] — 2026-05-18
+
 ### Added
 
+- **Systém → Plánované úlohy** (admin). Nová stránka ukazuje doporučený
+  seznam cron skriptů (`cron-cleanup`, `cron-backup`, `cron-backup-pdf`,
+  `cron-bank-scan`, `cron-send-reminders`, `cron-send-approval-reminders`,
+  `cron-generate-recurring-invoices`, `cron-version-check`), kdy každý
+  z nich naposled běžel, jak dopadl a kolik chyb měl za posledních 24 h.
+  Pokud poslední úspěšný běh chybí nebo je starší než doporučená frekvence
+  (`max_age_hours`), úloha je označená *Stáří* / *Selhává* / *Neběželo*.
+  Detekuje "cron není nastavený" i "cron běží, ale failuje" napříč Linux
+  cron / Windows Task Scheduler / Docker — bez čtení OS-level konfigurace.
+  Implementace: nová tabulka `cron_runs` (migrace `0024`) + helper
+  `MyInvoice\Service\Cron\CronRun` (`::start()` při startu, `->finish()`
+  při konci, `register_shutdown_function` jako safety net pro `exit(1)` /
+  fatal errors), katalog `CronCatalog`, endpoint `GET /api/admin/cron-jobs`.
+  Refresh každých 60 s. Cleanup starých záznamů (`cron_runs_purged`)
+  v `cron-cleanup`, default držíme 500 posledních běhů na skript.
 - **Validace email šablony před uložením.** `PUT /api/admin/email-templates/{code}/{locale}`
   teď před uložením zkusí šablonu pre-renderovat přes sandbox a vrátí
   čitelnou chybu (s názvem pole `body_html`/`body_text`), pokud najde

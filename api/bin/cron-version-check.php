@@ -22,11 +22,14 @@ require __DIR__ . '/../vendor/autoload.php';
 use MyInvoice\Bootstrap;
 use MyInvoice\Infrastructure\Config\Config;
 use MyInvoice\Infrastructure\Database\Connection;
+use MyInvoice\Service\Cron\CronRun;
 use MyInvoice\Service\Update\VersionService;
 
 $rootDir = Bootstrap::rootDir();
 $config  = Config::load($rootDir);
 $conn    = new Connection($config);
+
+$run = CronRun::start($conn->pdo(), 'cron-version-check');
 
 $svc    = new VersionService($conn);
 $status = $svc->refreshLatestVersion();
@@ -37,8 +40,11 @@ $err     = $status['last_check_error'] ?? '';
 
 if ($err !== '') {
     fwrite(STDERR, "[cron-version-check] FAILED: {$err}\n");
+    $run->finish('error', ['current' => $current, 'error' => $err], $err, 1);
     exit(1);
 }
 
 $marker = $status['has_update'] ? ' (UPDATE AVAILABLE)' : '';
 echo "[cron-version-check] OK current={$current} latest={$latest}{$marker}\n";
+
+$run->finish('ok', ['current' => $current, 'latest' => $latest, 'has_update' => (bool) ($status['has_update'] ?? false)]);

@@ -30,6 +30,7 @@ if (PHP_SAPI !== 'cli') exit("CLI only.\n");
 require __DIR__ . '/../vendor/autoload.php';
 
 use MyInvoice\Bootstrap;
+use MyInvoice\Service\Cron\CronRun;
 use MyInvoice\Service\Invoice\ReminderService;
 
 // Parse args
@@ -58,6 +59,7 @@ if ($container === null) {
 $conn = $container->get(\MyInvoice\Infrastructure\Database\Connection::class);
 $pdo = $conn->pdo();
 
+$run = CronRun::start($pdo, 'cron-send-reminders');
 $startedAt = microtime(true);
 
 $sql = "SELECT i.id, i.varsymbol, i.invoice_type, i.due_date, i.amount_to_pay, cur.code AS currency,
@@ -90,6 +92,7 @@ if (empty($candidates)) {
     echo "  (nothing to do, {$ms} ms)\n";
     $pdo->prepare("INSERT INTO activity_log (action, payload) VALUES ('cron.send_reminders', ?)")
         ->execute([json_encode($report, JSON_UNESCAPED_UNICODE)]);
+    $run->finish('ok', $report);
     exit(0);
 }
 
@@ -110,6 +113,7 @@ if ($dryRun) {
     }
     $ms = (int) ((microtime(true) - $startedAt) * 1000);
     echo "  ({$ms} ms — DRY RUN, no emails sent)\n";
+    $run->finish('ok', $report);
     exit(0);
 }
 
@@ -139,3 +143,5 @@ echo "  done ({$ms} ms): sent={$report['sent']}, errors={$report['errors']}\n";
 
 $pdo->prepare("INSERT INTO activity_log (action, payload) VALUES ('cron.send_reminders', ?)")
     ->execute([json_encode($report, JSON_UNESCAPED_UNICODE)]);
+
+$run->finish($report['errors'] > 0 ? 'error' : 'ok', $report);

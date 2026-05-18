@@ -29,6 +29,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use MyInvoice\Bootstrap;
 use MyInvoice\Repository\RecurringTemplateRepository;
+use MyInvoice\Service\Cron\CronRun;
 use MyInvoice\Service\Invoice\RecurringInvoiceGenerator;
 
 $dryRun = false;
@@ -48,6 +49,8 @@ if ($container === null) {
 /** @var \MyInvoice\Infrastructure\Database\Connection $conn */
 $conn = $container->get(\MyInvoice\Infrastructure\Database\Connection::class);
 $pdo = $conn->pdo();
+
+$run = CronRun::start($pdo, 'cron-generate-recurring-invoices');
 
 /** @var RecurringTemplateRepository $repo */
 $repo = $container->get(RecurringTemplateRepository::class);
@@ -74,6 +77,7 @@ if (empty($candidates)) {
     echo "  (nothing to do, {$ms} ms)\n";
     $pdo->prepare("INSERT INTO activity_log (action, payload) VALUES ('cron.generate_recurring', ?)")
         ->execute([json_encode($report, JSON_UNESCAPED_UNICODE)]);
+    $run->finish('ok', $report);
     exit(0);
 }
 
@@ -92,6 +96,7 @@ if ($dryRun) {
     }
     $ms = (int) ((microtime(true) - $startedAt) * 1000);
     echo "  ({$ms} ms — DRY RUN, nic se nevytvořilo)\n";
+    $run->finish('ok', $report);
     exit(0);
 }
 
@@ -123,3 +128,5 @@ echo "  done ({$ms} ms): generated={$report['generated']}, issued={$report['issu
 
 $pdo->prepare("INSERT INTO activity_log (action, payload) VALUES ('cron.generate_recurring', ?)")
     ->execute([json_encode($report, JSON_UNESCAPED_UNICODE)]);
+
+$run->finish($report['errors'] > 0 ? 'error' : 'ok', $report);

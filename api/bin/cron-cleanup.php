@@ -20,11 +20,13 @@ require __DIR__ . '/../vendor/autoload.php';
 use MyInvoice\Bootstrap;
 use MyInvoice\Infrastructure\Config\Config;
 use MyInvoice\Infrastructure\Database\Connection;
+use MyInvoice\Service\Cron\CronRun;
 
 $rootDir = Bootstrap::rootDir();
 $config  = Config::load($rootDir);
 $pdo     = (new Connection($config))->pdo();
 
+$run = CronRun::start($pdo, 'cron-cleanup');
 $startedAt = microtime(true);
 $report = [];
 
@@ -61,6 +63,9 @@ if (is_dir($logDir)) {
 }
 $report['log_files'] = $logDeleted;
 
+// Pročisti cron_runs — drž max 500 posledních záznamů na skript.
+$report['cron_runs_purged'] = CronRun::purgeOld($pdo, 500);
+
 $ms = (int) ((microtime(true) - $startedAt) * 1000);
 echo "[" . date('Y-m-d H:i:s') . "] cron-cleanup ({$ms} ms): " . json_encode($report, JSON_UNESCAPED_UNICODE) . "\n";
 
@@ -68,3 +73,5 @@ echo "[" . date('Y-m-d H:i:s') . "] cron-cleanup ({$ms} ms): " . json_encode($re
 $pdo->prepare(
     "INSERT INTO activity_log (action, payload) VALUES ('cron.cleanup', ?)"
 )->execute([json_encode($report, JSON_UNESCAPED_UNICODE)]);
+
+$run->finish('ok', $report);

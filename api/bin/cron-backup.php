@@ -14,9 +14,13 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use MyInvoice\Bootstrap;
 use MyInvoice\Infrastructure\Config\Config;
+use MyInvoice\Infrastructure\Database\Connection;
+use MyInvoice\Service\Cron\CronRun;
 
 $rootDir = Bootstrap::rootDir();
 $config  = Config::load($rootDir);
+
+$run = CronRun::start((new Connection($config))->pdo(), 'cron-backup');
 
 $dbHost = (string) $config->get('db.host');
 $dbName = (string) $config->get('db.name');
@@ -28,7 +32,9 @@ $backupDir = $rootDir . '/storage/backup';
 if (!is_dir($backupDir)) @mkdir($backupDir, 0755, true);
 
 if (!class_exists(ZipArchive::class)) {
-    fwrite(STDERR, "PHP ext-zip není nainstalována.\n");
+    $msg = 'PHP ext-zip není nainstalována.';
+    fwrite(STDERR, "$msg\n");
+    $run->finish('error', null, $msg, 1);
     exit(1);
 }
 
@@ -65,7 +71,9 @@ if ($tool === '' && stripos(PHP_OS, 'WIN') === 0) {
     $tool = $candidates[0] ?? '';
 }
 if ($tool === '') {
-    fwrite(STDERR, "mariadb-dump ani mysqldump není v PATH (ani v běžných instalačních cestách). Nastav db.dump_tool v cfg.php.\n");
+    $msg = 'mariadb-dump ani mysqldump není v PATH (ani v běžných instalačních cestách). Nastav db.dump_tool v cfg.php.';
+    fwrite(STDERR, "$msg\n");
+    $run->finish('error', null, $msg, 1);
     exit(1);
 }
 
@@ -146,8 +154,10 @@ if ($rc !== 0 && $privIssue) {
 @unlink($cnf);
 
 if ($rc !== 0 || !is_file($sqlTmp) || filesize($sqlTmp) < 100) {
-    fwrite(STDERR, "Backup selhal (rc=$rc)" . ($err !== '' ? ": $err" : '') . "\n");
+    $msg = "Backup selhal (rc=$rc)" . ($err !== '' ? ": $err" : '');
+    fwrite(STDERR, "$msg\n");
     @unlink($sqlTmp);
+    $run->finish('error', null, $msg, 1);
     exit(1);
 }
 
@@ -179,6 +189,8 @@ if (!is_file($file) || filesize($file) < 100) {
 $size = round(filesize($file) / 1024, 1);
 echo "[" . date('Y-m-d H:i:s') . "] backup: " . basename($file) . " ({$size} KB)\n";
 
+$report = ['file' => basename($file), 'size_kb' => $size];
+
 // Retention: smaž denní starší 30 dní (kromě 1. v měsíci, ty drž 365 dní)
 // Bere v potaz i staré .sql.gz formáty z dřívějška.
 // Filtrujeme jen DB dumpy "{dbName}-YYYY-MM-DD.{zip,sql.gz}" — PDF backup
@@ -198,5 +210,8 @@ foreach ($files as $f) {
     if ($age > $maxAge) {
         @unlink($f);
         echo "  - retention: smazáno " . basename($f) . "\n";
+        $report['retention_purged'] = ($report['retention_purged'] ?? 0) + 1;
     }
 }
+
+$run->finish('ok', $report);

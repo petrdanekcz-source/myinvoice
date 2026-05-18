@@ -57,6 +57,39 @@ export const adminApi = {
     api.put(`/admin/email-templates/${code}/${locale}`, payload),
   resetEmailTemplate: (code: string, locale: string) =>
     api.delete(`/admin/email-templates/${code}/${locale}`),
+
+  // Cron jobs (Systém → Plánované úlohy)
+  cronJobs: () => api.get<CronJobsResponse>('/admin/cron-jobs').then(r => r.data),
+}
+
+export type CronJobHealth = 'ok' | 'overdue' | 'failing' | 'overdue_and_failing' | 'never_ran'
+
+export interface CronJob {
+  script: string
+  recommended: string
+  linux_cron: string
+  windows_schtasks: string
+  weekdays_only: boolean
+  critical: boolean
+  max_age_hours: number
+  health: CronJobHealth
+  last_started_at: string | null
+  last_finished_at: string | null
+  last_status: 'running' | 'ok' | 'error' | null
+  last_duration_ms: number | null
+  last_exit_code: number | null
+  last_host: string | null
+  last_message: string | null
+  last_report: Record<string, unknown> | null
+  last_ok_started_at: string | null
+  last_ok_finished_at: string | null
+  age_sec_since_ok: number | null
+  counts_24h: { ok: number; error: number; total: number }
+}
+
+export interface CronJobsResponse {
+  jobs: CronJob[]
+  server_time: string
 }
 
 export interface ApprovalInboxItem {
