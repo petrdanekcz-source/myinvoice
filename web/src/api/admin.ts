@@ -60,6 +60,8 @@ export const adminApi = {
 
   // Cron jobs (Systém → Plánované úlohy)
   cronJobs: () => api.get<CronJobsResponse>('/admin/cron-jobs').then(r => r.data),
+  runCronJob: (script: string) =>
+    api.post<{ script: string; started: boolean }>(`/admin/cron-jobs/${encodeURIComponent(script)}/run`).then(r => r.data),
 }
 
 export type CronJobHealth = 'ok' | 'overdue' | 'failing' | 'overdue_and_failing' | 'never_ran'

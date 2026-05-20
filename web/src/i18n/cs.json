@@ -1128,7 +1128,11 @@
     "ago_hours": "před {n} h",
     "ago_days": "před {n} d",
     "errors_in_24h": "{n} chyb",
-    "all_ok": "Všechny úlohy běží dle plánu."
+    "all_ok": "Všechny úlohy běží dle plánu.",
+    "run_now": "Spustit nyní",
+    "run_now_confirm": "Opravdu spustit skript {script} nyní? Poběží na pozadí a výsledek se objeví v tabulce po dokončení.",
+    "run_now_started": "Skript {script} byl spuštěn na pozadí.",
+    "run_now_failed": "Spuštění skriptu {script} se nezdařilo."
   },
   "export": {
     "title": "Exporty",

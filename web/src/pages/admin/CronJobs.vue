@@ -2,13 +2,16 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminApi, type CronJob, type CronJobHealth } from '@/api/admin'
+import { useToast } from '@/composables/useToast'
 
 const { t } = useI18n()
+const toast = useToast()
 
 const jobs = ref<CronJob[]>([])
 const serverTime = ref<string>('')
 const loading = ref(false)
 const expanded = ref<Record<string, boolean>>({})
+const running = ref<Record<string, boolean>>({})
 
 async function load() {
   loading.value = true
@@ -32,6 +35,24 @@ onUnmounted(() => {
 
 function toggle(script: string) {
   expanded.value[script] = !expanded.value[script]
+}
+
+async function runNow(script: string) {
+  if (running.value[script]) return
+  if (!window.confirm(t('cron_jobs.run_now_confirm', { script }))) return
+  running.value[script] = true
+  try {
+    await adminApi.runCronJob(script)
+    toast.success(t('cron_jobs.run_now_started', { script }))
+    // Refresh hned a pak ještě několikrát, aby se chytl finish běhu.
+    setTimeout(() => { load() }, 1500)
+    setTimeout(() => { load() }, 5000)
+    setTimeout(() => { load() }, 15000)
+  } catch (e: any) {
+    toast.error(e?.response?.data?.error?.message || t('cron_jobs.run_now_failed', { script }))
+  } finally {
+    running.value[script] = false
+  }
 }
 
 function fmtTime(iso: string | null): string {
@@ -115,6 +136,7 @@ const hasProblems = computed(() => jobs.value.some(j => j.health !== 'ok'))
               <th class="px-3 py-2 text-left font-medium">{{ t('cron_jobs.duration') }}</th>
               <th class="px-3 py-2 text-left font-medium">{{ t('cron_jobs.last_24h') }}</th>
               <th class="px-3 py-2 text-left font-medium">{{ t('cron_jobs.health') }}</th>
+              <th class="px-3 py-2 text-right font-medium"></th>
               <th class="px-3 py-2 text-right font-medium w-12"></th>
             </tr>
           </thead>
@@ -150,6 +172,19 @@ const hasProblems = computed(() => jobs.value.some(j => j.health !== 'ok'))
                     {{ healthLabel(j.health) }}
                   </span>
                 </td>
+                <td class="px-3 py-2 text-right whitespace-nowrap" @click.stop>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 disabled:opacity-50 disabled:cursor-wait"
+                    :disabled="running[j.script]"
+                    @click="runNow(j.script)"
+                  >
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    {{ t('cron_jobs.run_now') }}
+                  </button>
+                </td>
                 <td class="px-3 py-2 text-right">
                   <svg class="w-4 h-4 text-neutral-400 inline-block transition" :class="{ 'rotate-180': expanded[j.script] }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -157,7 +192,7 @@ const hasProblems = computed(() => jobs.value.some(j => j.health !== 'ok'))
                 </td>
               </tr>
               <tr v-if="expanded[j.script]" class="bg-neutral-50/60">
-                <td colspan="7" class="px-3 py-3">
+                <td colspan="8" class="px-3 py-3">
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
                     <div>
                       <span class="text-neutral-500">Linux cron: </span>
@@ -216,6 +251,16 @@ const hasProblems = computed(() => jobs.value.some(j => j.health !== 'ok'))
             </span>
           </div>
           <div v-if="j.last_message" class="text-xs text-danger-600 font-mono break-all">{{ j.last_message }}</div>
+          <div class="pt-1">
+            <button
+              type="button"
+              class="text-xs px-2 py-1 rounded border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 disabled:opacity-50 disabled:cursor-wait"
+              :disabled="running[j.script]"
+              @click="runNow(j.script)"
+            >
+              {{ t('cron_jobs.run_now') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
