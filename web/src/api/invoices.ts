@@ -343,7 +343,7 @@ export const invoicesApi = {
     return `/api/invoices/${id}/pdfs/${archiveId}${qs ? '?' + qs : ''}`
   },
 
-  send: (id: number, payload?: { to?: string[]; cc?: string[]; bcc?: string[]; subject_override?: string | null }) =>
+  send: (id: number, payload?: { to?: string[]; cc?: string[]; bcc?: string[]; subject_override?: string | null; note?: string }) =>
     api.post<{ sent_to: string[]; cc: string[]; bcc: string[]; sent_at: string; is_test: false }>(
       `/invoices/${id}/send`,
       payload || {},

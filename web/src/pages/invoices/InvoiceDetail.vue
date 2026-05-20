@@ -39,6 +39,7 @@ const cancelReason = ref('')
 // Send modal state
 const sendOpen = ref(false)
 const sendTo = ref('')
+const sendNote = ref('')
 
 // Reminder modal state
 const reminderOpen = ref(false)
@@ -449,6 +450,7 @@ function openSendModal() {
   const billing = (invoice.value.project_billing_emails || []).map(b => b.email)
   const all = [main, ...billing].filter(Boolean)
   sendTo.value = Array.from(new Set(all)).join(', ')
+  sendNote.value = ''
   sendOpen.value = true
 }
 
@@ -461,7 +463,11 @@ async function send() {
   }
   busy.value = 'send'
   try {
-    const r = await invoicesApi.send(invoice.value.id, { to: recipients })
+    const note = sendNote.value.trim()
+    const r = await invoicesApi.send(invoice.value.id, {
+      to: recipients,
+      ...(note ? { note } : {}),
+    })
     sendOpen.value = false
     toast.success( t('invoice.send_done', { recipients: r.sent_to.join(', ') }))
     await load()
@@ -826,6 +832,11 @@ async function updateApprovalStatus() {
         <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('invoice.modals.send_recipients') }}</label>
         <input v-model="sendTo" type="text" class="w-full h-10 px-3 border border-neutral-300 rounded-md mb-2 text-sm" />
         <p class="text-xs text-neutral-500 mb-4">{{ t('invoice.modals.send_default_hint') }}</p>
+        <label class="block text-sm font-medium text-neutral-700 mb-1">{{ t('invoice.modals.send_note_label') }}</label>
+        <textarea v-model="sendNote" rows="4" maxlength="5000"
+          :placeholder="t('invoice.modals.send_note_placeholder')"
+          class="w-full px-3 py-2 border border-neutral-300 rounded-md mb-2 text-sm font-sans resize-y"></textarea>
+        <p class="text-xs text-neutral-500 mb-4">{{ t('invoice.modals.send_note_hint') }}</p>
         <div class="flex justify-end gap-2">
           <button @click="sendOpen = false" class="cursor-pointer px-3 h-9 text-sm border border-neutral-300 rounded-md text-neutral-700 hover:bg-neutral-50">{{ t('common.cancel') }}</button>
           <button @click="send" :disabled="busy !== null"

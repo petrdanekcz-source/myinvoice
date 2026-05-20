@@ -5,6 +5,10 @@
 ------------
 
 {{ intro_plain }}
+{% if note_text is defined and note_text|length %}
+
+{{ note_text }}
+{% endif %}
 
 Variabilní symbol: {{ invoice.varsymbol }}
 Datum vystavení:   {{ invoice.issue_date|date('j.n.Y') }}

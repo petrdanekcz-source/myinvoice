@@ -5,6 +5,10 @@
 ------------
 
 {{ intro_plain }}
+{% if note_text is defined and note_text|length %}
+
+{{ note_text }}
+{% endif %}
 
 Variable symbol: {{ invoice.varsymbol }}
 Issue date:      {{ invoice.issue_date|date('M j, Y') }}

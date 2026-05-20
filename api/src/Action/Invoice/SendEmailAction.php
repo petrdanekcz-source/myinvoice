@@ -55,6 +55,22 @@ final class SendEmailAction
         $bcc = isset($body['bcc']) && is_array($body['bcc']) ? array_filter(array_map('trim', $body['bcc'])) : [];
         $subjectOverride = isset($body['subject_override']) ? (string) $body['subject_override'] : null;
 
+        // Volitelná poznámka od uživatele přidaná do těla emailu (NE do PDF).
+        // Plain text; v HTML šabloně se každý neprázdný řádek vyrenderuje jako <p>
+        // s Twig autoescapem (žádný |raw → bez HTML injection). V TXT šabloně se
+        // vloží jak je.
+        $noteRaw = isset($body['note']) ? trim((string) $body['note']) : '';
+        if ($noteRaw !== '' && mb_strlen($noteRaw) > 5000) {
+            $noteRaw = mb_substr($noteRaw, 0, 5000);
+        }
+        $noteLines = [];
+        if ($noteRaw !== '') {
+            foreach (preg_split('/\r\n|\r|\n/', $noteRaw) as $line) {
+                $line = trim((string) $line);
+                if ($line !== '') $noteLines[] = $line;
+            }
+        }
+
         $to = $overrideTo ?? $this->resolveRecipients($invoice);
         if (empty($to)) {
             return Json::error($response, 'no_recipients', 'Žádný platný příjemce (chybí email klienta).', 400);
@@ -87,6 +103,8 @@ final class SendEmailAction
 
         $locale = (string) ($invoice['language'] ?? 'cs');
         $vars = $this->varsBuilder->build($invoice, false, $locale);
+        $vars['note_lines'] = $noteLines;
+        $vars['note_text']  = $noteRaw;
 
         // Hlavní PDF + volitelné uživatelské přílohy (jen invoice/proforma/credit_note,
         // ne upomínky — tento send flow se použije jen tady).
@@ -140,6 +158,7 @@ final class SendEmailAction
             'pdf_archive_id' => $archiveId,
             'attachment_ids' => $sentAttachmentIds,
             'smtp_response'  => $smtpResponse,
+            'note_chars'     => mb_strlen($noteRaw),
         ], $ip, $request->getHeaderLine('User-Agent'));
 
         return Json::ok($response, [
