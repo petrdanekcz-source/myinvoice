@@ -63,6 +63,13 @@ const ICONS = {
   updates:    'M4 4v5h5M4 9a8 8 0 0 1 14.13-4.06M20 20v-5h-5M20 15a8 8 0 0 1-14.13 4.06',
   api_tokens: 'M15 7a2 2 0 0 1 2 2m4 0a6 6 0 0 1-7.743 5.743L11 17H9v2H7v2H4a1 1 0 0 1-1-1v-2.586a1 1 0 0 1 .293-.707l5.964-5.964A6 6 0 1 1 21 9z',
   help:       'M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827V14m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  ai:         'M13 10V3L4 14h7v7l9-11h-7z',
+  // Daně sekce — různé ikony pro každý report
+  tax_dph:    'M3 10h18M3 14h18M5 21V3a1 1 0 011-1h12a1 1 0 011 1v18M9 7h6M9 11h6M9 15h6',
+  tax_kh:     'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+  tax_shv:    'M12 21l-8-8 8-8m0 0l8 8-8 8M3 12h18',
+  tax_income: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  tax_archive: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4',
 }
 
 const navSections = computed<NavSection[]>(() => {
@@ -88,7 +95,8 @@ const navSections = computed<NavSection[]>(() => {
       items: [
         { to: '/purchase-invoices',          label: t('nav.purchase_invoices'),  icon: ICONS.purchase },
         { to: '/purchase-invoices/export',   label: t('nav.purchase_export'),    icon: ICONS.exports },
-        ...(isAdmin ? [{ to: '/admin/import?tab=purchase', label: t('nav.imports_purchase'),  icon: ICONS.imports }] : []),
+        ...(isAdmin ? [{ to: '/admin/import?tab=purchase',  label: t('nav.imports_purchase'), icon: ICONS.imports }] : []),
+        ...(isAdmin ? [{ to: '/admin/integrations?tab=ai',  label: t('nav.ai_import'),        icon: ICONS.ai }] : []),
       ],
     },
     {
@@ -102,11 +110,11 @@ const navSections = computed<NavSection[]>(() => {
     {
       title: t('nav.section_taxes'),
       items: [
-        { to: '/reports/dph',         label: t('nav.reports_dph'),         icon: ICONS.reports },
-        { to: '/reports/kh',          label: t('nav.reports_kh'),          icon: ICONS.reports },
-        { to: '/reports/shv',         label: t('nav.reports_shv'),         icon: ICONS.reports },
-        { to: '/reports/income-tax',  label: t('nav.reports_income_tax'),  icon: ICONS.reports },
-        { to: '/reports/submissions', label: t('nav.reports_submissions'), icon: ICONS.log },
+        { to: '/reports/dph',         label: t('nav.reports_dph'),         icon: ICONS.tax_dph },
+        { to: '/reports/kh',          label: t('nav.reports_kh'),          icon: ICONS.tax_kh },
+        { to: '/reports/shv',         label: t('nav.reports_shv'),         icon: ICONS.tax_shv },
+        { to: '/reports/income-tax',  label: t('nav.reports_income_tax'),  icon: ICONS.tax_income },
+        { to: '/reports/submissions', label: t('nav.reports_submissions'), icon: ICONS.tax_archive },
       ],
     },
   ]

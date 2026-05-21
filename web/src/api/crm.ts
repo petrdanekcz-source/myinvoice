@@ -117,4 +117,82 @@ export const crmApi = {
     api.get<ChurnRiskClient[]>('/crm/churn-risk', { params: { days, limit } }).then(r => r.data),
   recompute: () =>
     api.post<{ ok: boolean; elapsed_ms: number }>('/crm/recompute', {}).then(r => r.data),
+
+  // ─── Tier 1 (action + predictive) ───────────────────────────────────
+  actionItems: () =>
+    api.get<ActionItemsResult>('/crm/action-items').then(r => r.data),
+  cashFlowForecast: (weeks = 4, currency = 'CZK') =>
+    api.get<CashFlowResult>('/crm/cash-flow-forecast', { params: { weeks, currency } }).then(r => r.data),
+  lateRisk: (limit = 10) =>
+    api.get<LateRiskClient[]>('/crm/late-risk', { params: { limit } }).then(r => r.data),
+  reminderEffectiveness: (months = 12) =>
+    api.get<ReminderEffectiveness>('/crm/reminder-effectiveness', { params: { months } }).then(r => r.data),
+  paymentTimeHistogram: (months = 12) =>
+    api.get<PaymentTimeHistogram>('/crm/payment-time-histogram', { params: { months } }).then(r => r.data),
+}
+
+// ─── Tier 1 types ─────────────────────────────────────────────────────
+export interface ActionItem {
+  type: string
+  severity: 'low' | 'medium' | 'high'
+  title: string
+  hint: string
+  link: string
+  count?: number
+  days?: number
+}
+export interface ActionItemsResult {
+  items: ActionItem[]
+  total: number
+}
+
+export interface CashFlowWeek {
+  week_start: string
+  week_end: string
+  in: number
+  out: number
+  net: number
+  running: number
+}
+export interface CashFlowResult {
+  currency: string
+  weeks: CashFlowWeek[]
+  total_in: number
+  total_out: number
+  total_net: number
+}
+
+export interface LateRiskClient {
+  client_id: number
+  company_name: string
+  total_paid: number
+  late_count: number
+  late_rate: number
+  avg_days_late: number
+  score: number
+  risk_level: 'low' | 'medium' | 'high'
+}
+
+export interface ReminderEffectiveness {
+  total_paid: number
+  no_reminder: number
+  after_first: number
+  after_second: number
+  after_third_plus: number
+  never_paid: number
+  avg_reminders_to_paid: number
+}
+
+export interface HistogramBucket {
+  label: string
+  min: number
+  max: number | null
+  count: number
+  percent: number
+}
+export interface PaymentTimeHistogram {
+  buckets: HistogramBucket[]
+  total_invoices: number
+  median_days: number | null
+  p90_days: number | null
 }

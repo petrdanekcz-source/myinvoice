@@ -6,7 +6,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
 import { crmApi, type CrmOverview, type CrmMonthlyRow, type TopClient, type TopVendor,
   type AgingBucket, type DsoResult, type PunctualityResult, type ConcentrationResult,
-  type ExpenseCategoryRow, type ChurnRiskClient } from '@/api/crm'
+  type ExpenseCategoryRow, type ChurnRiskClient,
+  type ActionItemsResult, type CashFlowResult, type LateRiskClient,
+  type ReminderEffectiveness, type PaymentTimeHistogram } from '@/api/crm'
 import { formatMoney } from '@/composables/useFormat'
 import { apiErrorMessage } from '@/api/errors'
 
@@ -25,6 +27,11 @@ const punctuality = ref<PunctualityResult | null>(null)
 const concentration = ref<ConcentrationResult | null>(null)
 const expenses = ref<ExpenseCategoryRow[]>([])
 const churn = ref<ChurnRiskClient[]>([])
+const actionItems = ref<ActionItemsResult | null>(null)
+const cashFlow = ref<CashFlowResult | null>(null)
+const lateRisk = ref<LateRiskClient[]>([])
+const reminderEff = ref<ReminderEffectiveness | null>(null)
+const paymentHist = ref<PaymentTimeHistogram | null>(null)
 const loading = ref(true)
 const recomputing = ref(false)
 
@@ -45,7 +52,7 @@ async function loadAll() {
   loading.value = true
   try {
     const cur = currencyFilter.value || undefined
-    const [ov, mo, tc, tv, ar, ap, d, p, conc, exp, ch] = await Promise.all([
+    const [ov, mo, tc, tv, ar, ap, d, p, conc, exp, ch, ai, cf, lr, re, ph] = await Promise.all([
       crmApi.overview(),
       crmApi.monthly(periodMonths.value, cur),
       crmApi.topClients(periodMonths.value, 10, cur),
@@ -57,6 +64,11 @@ async function loadAll() {
       crmApi.concentration(periodMonths.value, cur),
       crmApi.expenseBreakdown(periodMonths.value, cur),
       crmApi.churnRisk(60, 10),
+      crmApi.actionItems(),
+      crmApi.cashFlowForecast(4, cur || 'CZK'),
+      crmApi.lateRisk(10),
+      crmApi.reminderEffectiveness(periodMonths.value),
+      crmApi.paymentTimeHistogram(periodMonths.value),
     ])
     overview.value = ov
     monthly.value = mo
@@ -69,6 +81,11 @@ async function loadAll() {
     concentration.value = conc
     expenses.value = exp
     churn.value = ch
+    actionItems.value = ai
+    cashFlow.value = cf
+    lateRisk.value = lr
+    reminderEff.value = re
+    paymentHist.value = ph
   } catch (e) {
     toast.error(apiErrorMessage(e))
   } finally {
@@ -215,6 +232,31 @@ onMounted(loadAll)
     </div>
 
     <div v-else class="space-y-4">
+      <!-- ═══ Action items widget (daily TODO) ═══ -->
+      <div v-if="actionItems && actionItems.total > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+        <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between bg-gradient-to-r from-primary-50 to-white">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-primary-700">
+            ⚡ {{ t('crm.action_items.title') }}
+            <span class="ml-2 px-1.5 py-0.5 bg-primary-600 text-white rounded text-xs">{{ actionItems.total }}</span>
+          </h3>
+        </header>
+        <div class="divide-y divide-neutral-100">
+          <RouterLink v-for="(item, idx) in actionItems.items" :key="idx" :to="item.link"
+            class="flex items-center justify-between px-5 py-3 hover:bg-neutral-50 cursor-pointer">
+            <div class="flex items-center gap-3">
+              <span :class="['inline-block w-2.5 h-2.5 rounded-full',
+                item.severity === 'high' ? 'bg-danger-500' :
+                item.severity === 'medium' ? 'bg-warning-500' : 'bg-neutral-400']"></span>
+              <div>
+                <div class="text-sm font-medium text-neutral-700">{{ item.title }}</div>
+                <div class="text-xs text-neutral-500 mt-0.5">{{ item.hint }}</div>
+              </div>
+            </div>
+            <svg class="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </RouterLink>
+        </div>
+      </div>
+
       <!-- ═══ KPI cards ═══ -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <!-- Revenue -->
@@ -567,6 +609,162 @@ onMounted(loadAll)
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ═══ Cash flow forecast (4 týdny) ═══ -->
+      <div v-if="cashFlow && cashFlow.weeks.length > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+        <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            💰 {{ t('crm.cash_flow.title') }} ({{ cashFlow.currency }})
+          </h3>
+          <div class="text-xs text-neutral-500">{{ t('crm.cash_flow.next_n_weeks', { n: cashFlow.weeks.length }) }}</div>
+        </header>
+        <table class="w-full text-sm">
+          <thead class="bg-neutral-50 text-xs text-neutral-500 uppercase tracking-wide">
+            <tr>
+              <th class="text-left px-5 py-2">{{ t('crm.cash_flow.week') }}</th>
+              <th class="text-right px-3 py-2">{{ t('crm.cash_flow.in') }}</th>
+              <th class="text-right px-3 py-2">{{ t('crm.cash_flow.out') }}</th>
+              <th class="text-right px-3 py-2">{{ t('crm.cash_flow.net') }}</th>
+              <th class="text-right px-5 py-2">{{ t('crm.cash_flow.running') }}</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-neutral-100">
+            <tr v-for="(w, i) in cashFlow.weeks" :key="i" class="hover:bg-neutral-50">
+              <td class="px-5 py-2 text-xs">
+                <span class="font-medium">{{ new Date(w.week_start).toLocaleDateString() }}</span>
+                <span class="text-neutral-400"> – {{ new Date(w.week_end).toLocaleDateString() }}</span>
+              </td>
+              <td class="px-3 py-2 text-right font-mono text-success-600">{{ formatMoney(w.in, cashFlow.currency) }}</td>
+              <td class="px-3 py-2 text-right font-mono text-danger-500">−{{ formatMoney(w.out, cashFlow.currency) }}</td>
+              <td class="px-3 py-2 text-right font-mono" :class="w.net >= 0 ? 'text-success-600' : 'text-danger-500'">
+                {{ w.net >= 0 ? '+' : '' }}{{ formatMoney(w.net, cashFlow.currency) }}
+              </td>
+              <td class="px-5 py-2 text-right font-mono font-medium" :class="w.running >= 0 ? 'text-neutral-700' : 'text-danger-500'">
+                {{ formatMoney(w.running, cashFlow.currency) }}
+              </td>
+            </tr>
+          </tbody>
+          <tfoot class="bg-neutral-50">
+            <tr>
+              <td class="px-5 py-2 text-xs font-medium">{{ t('crm.cash_flow.total') }}</td>
+              <td class="px-3 py-2 text-right font-mono text-success-600 font-medium">{{ formatMoney(cashFlow.total_in, cashFlow.currency) }}</td>
+              <td class="px-3 py-2 text-right font-mono text-danger-500 font-medium">−{{ formatMoney(cashFlow.total_out, cashFlow.currency) }}</td>
+              <td colspan="2" class="px-5 py-2 text-right font-mono font-bold" :class="cashFlow.total_net >= 0 ? 'text-success-600' : 'text-danger-500'">
+                {{ cashFlow.total_net >= 0 ? '+' : '' }}{{ formatMoney(cashFlow.total_net, cashFlow.currency) }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- ═══ Late payment risk + Payment time histogram side-by-side ═══ -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Late risk -->
+        <div class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+          <header class="px-5 py-3 border-b border-neutral-200">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+              ⚠️ {{ t('crm.late_risk.title') }}
+            </h3>
+          </header>
+          <div v-if="lateRisk.length === 0" class="p-6 text-center text-sm text-neutral-400">
+            {{ t('crm.late_risk.no_data') }}
+          </div>
+          <table v-else class="w-full text-sm">
+            <thead class="bg-neutral-50 text-xs text-neutral-500 uppercase tracking-wide">
+              <tr>
+                <th class="text-left px-5 py-2">{{ t('crm.late_risk.client') }}</th>
+                <th class="text-right px-3 py-2">{{ t('crm.late_risk.late_rate') }}</th>
+                <th class="text-right px-3 py-2">{{ t('crm.late_risk.avg_days') }}</th>
+                <th class="text-center px-5 py-2">{{ t('crm.late_risk.score') }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-neutral-100">
+              <tr v-for="c in lateRisk" :key="c.client_id" class="hover:bg-neutral-50">
+                <td class="px-5 py-2">
+                  <RouterLink :to="`/clients/${c.client_id}`" class="text-sm font-medium hover:text-primary-700 hover:underline">
+                    {{ c.company_name }}
+                  </RouterLink>
+                  <div class="text-xs text-neutral-500">{{ c.late_count }}/{{ c.total_paid }} {{ t('crm.late_risk.late_paid') }}</div>
+                </td>
+                <td class="px-3 py-2 text-right font-mono text-xs">{{ Math.round(c.late_rate * 100) }}%</td>
+                <td class="px-3 py-2 text-right font-mono text-xs">{{ c.avg_days_late.toFixed(1) }} d</td>
+                <td class="px-5 py-2 text-center">
+                  <span :class="['inline-block px-2 py-0.5 rounded text-xs font-bold',
+                    c.risk_level === 'high' ? 'bg-danger-50 text-danger-500' :
+                    c.risk_level === 'medium' ? 'bg-warning-50 text-warning-600' : 'bg-success-50 text-success-600']">
+                    {{ c.score }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Payment time histogram -->
+        <div class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+          <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+              ⏱️ {{ t('crm.payment_time.title') }}
+            </h3>
+            <div v-if="paymentHist && paymentHist.median_days !== null" class="text-xs text-neutral-500">
+              {{ t('crm.payment_time.median') }}: <span class="font-mono font-medium">{{ paymentHist.median_days }} {{ t('crm.payment_time.days') }}</span>
+            </div>
+          </header>
+          <div v-if="!paymentHist || paymentHist.total_invoices === 0" class="p-6 text-center text-sm text-neutral-400">
+            {{ t('crm.payment_time.no_data') }}
+          </div>
+          <div v-else class="p-4 space-y-2">
+            <div v-for="b in paymentHist.buckets" :key="b.label" class="text-xs">
+              <div class="flex justify-between mb-1">
+                <span class="text-neutral-700 font-medium">{{ b.label }}</span>
+                <span class="font-mono text-neutral-600">{{ b.count }} ({{ b.percent }}%)</span>
+              </div>
+              <div class="w-full bg-neutral-100 rounded h-2 overflow-hidden">
+                <div class="h-full rounded transition-all" :style="{ width: b.percent + '%' }"
+                  :class="b.min >= 31 ? 'bg-danger-400' : b.min >= 15 ? 'bg-warning-400' : 'bg-success-500'"></div>
+              </div>
+            </div>
+            <div class="text-xs text-neutral-500 mt-3 pt-3 border-t border-neutral-100">
+              {{ t('crm.payment_time.total') }}: {{ paymentHist.total_invoices }} •
+              {{ t('crm.payment_time.p90') }}: {{ paymentHist.p90_days ?? '—' }} {{ t('crm.payment_time.days') }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Reminder effectiveness funnel ═══ -->
+      <div v-if="reminderEff && reminderEff.total_paid > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+        <header class="px-5 py-3 border-b border-neutral-200">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            📧 {{ t('crm.reminder.title') }}
+          </h3>
+        </header>
+        <div class="p-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+          <div>
+            <div class="text-2xl font-bold text-success-600">{{ reminderEff.no_reminder }}</div>
+            <div class="text-xs text-neutral-500 mt-1">{{ t('crm.reminder.no_reminder') }}</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-primary-600">{{ reminderEff.after_first }}</div>
+            <div class="text-xs text-neutral-500 mt-1">{{ t('crm.reminder.after_first') }}</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-warning-600">{{ reminderEff.after_second }}</div>
+            <div class="text-xs text-neutral-500 mt-1">{{ t('crm.reminder.after_second') }}</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-danger-500">{{ reminderEff.after_third_plus }}</div>
+            <div class="text-xs text-neutral-500 mt-1">{{ t('crm.reminder.after_third_plus') }}</div>
+          </div>
+          <div>
+            <div class="text-2xl font-bold text-neutral-400">{{ reminderEff.never_paid }}</div>
+            <div class="text-xs text-neutral-500 mt-1">{{ t('crm.reminder.never_paid') }}</div>
+          </div>
+        </div>
+        <div class="px-4 pb-3 text-xs text-neutral-500 text-center">
+          {{ t('crm.reminder.avg_reminders') }}: <span class="font-mono font-medium">{{ reminderEff.avg_reminders_to_paid }}</span>
         </div>
       </div>
     </div>

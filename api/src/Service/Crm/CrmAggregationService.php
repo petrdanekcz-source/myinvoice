@@ -507,4 +507,410 @@ final class CrmAggregationService
             'currency'          => (string) $r['currency'],
         ], $stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
+
+    /**
+     * Action items widget — daily TODO list pro user.
+     *
+     * @return array{
+     *   items: list<array{type:string, severity:string, title:string, hint:string, link:string, count?:int, days?:int}>,
+     *   total: int
+     * }
+     */
+    public function actionItems(int $supplierId): array
+    {
+        $items = [];
+        $pdo = $this->db->pdo();
+        $today = (new \DateTimeImmutable())->format('Y-m-d');
+
+        // 1. Overdue vystavené faktury — pošli upomínku
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM invoices
+              WHERE supplier_id = ?
+                AND status IN ('issued', 'sent', 'reminded')
+                AND invoice_type != 'proforma'
+                AND due_date < ?"
+        );
+        $stmt->execute([$supplierId, $today]);
+        $overdueCount = (int) $stmt->fetchColumn();
+        if ($overdueCount > 0) {
+            $items[] = [
+                'type'     => 'overdue_invoices',
+                'severity' => $overdueCount > 5 ? 'high' : 'medium',
+                'title'    => 'Pošli upomínky',
+                'hint'     => sprintf('%d %s po splatnosti', $overdueCount,
+                    $overdueCount === 1 ? 'faktura' : ($overdueCount < 5 ? 'faktury' : 'faktur')),
+                'link'     => '/invoices?status=overdue',
+                'count'    => $overdueCount,
+            ];
+        }
+
+        // 2. Recurring s next_run_date v <= 3 dnech (nové faktury k vystavení)
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM recurring_invoice_templates
+              WHERE supplier_id = ?
+                AND (end_date IS NULL OR end_date >= ?)
+                AND next_run_date IS NOT NULL
+                AND next_run_date <= DATE_ADD(?, INTERVAL 3 DAY)
+                AND next_run_date >= ?"
+        );
+        $stmt->execute([$supplierId, $today, $today, $today]);
+        $recurringCount = (int) $stmt->fetchColumn();
+        if ($recurringCount > 0) {
+            $items[] = [
+                'type'     => 'recurring_due',
+                'severity' => 'medium',
+                'title'    => 'Vystav pravidelné faktury',
+                'hint'     => sprintf('%d %s má vystavit v příštích 3 dnech', $recurringCount,
+                    $recurringCount === 1 ? 'recurring fakturace' : 'recurring fakturací'),
+                'link'     => '/recurring',
+                'count'    => $recurringCount,
+            ];
+        }
+
+        // 3. Přijaté faktury po splatnosti — zaplatit dodavateli
+        $stmt = $pdo->prepare(
+            "SELECT COUNT(*) FROM purchase_invoices
+              WHERE supplier_id = ?
+                AND status IN ('received', 'booked')
+                AND due_date < ?"
+        );
+        $stmt->execute([$supplierId, $today]);
+        $payablesCount = (int) $stmt->fetchColumn();
+        if ($payablesCount > 0) {
+            $items[] = [
+                'type'     => 'overdue_payables',
+                'severity' => $payablesCount > 3 ? 'high' : 'medium',
+                'title'    => 'Zaplať dodavatelům',
+                'hint'     => sprintf('%d nezaplacených přijatých %s po splatnosti', $payablesCount,
+                    $payablesCount === 1 ? 'faktura' : 'faktur'),
+                'link'     => '/purchase-invoices?overdue=1',
+                'count'    => $payablesCount,
+            ];
+        }
+
+        // 4. Reports deadlines — DPH/KH/SH se podávají 25. následujícího měsíce
+        $now = new \DateTimeImmutable($today);
+        $currentMonth = (int) $now->format('n');
+        $currentYear = (int) $now->format('Y');
+        $deadlineDate = $currentMonth === 1
+            ? "{$currentYear}-01-25" // for prev year December (taken across new year)
+            : sprintf('%04d-%02d-25', $currentYear, $currentMonth);
+        $deadlineDt = new \DateTimeImmutable($deadlineDate);
+        $daysToDeadline = (int) $now->diff($deadlineDt)->format('%r%a');
+        // Jen pokud jsme plátci DPH (mají vyplněné is_vat_payer + financial_office_code)
+        $stmt = $pdo->prepare(
+            "SELECT is_vat_payer FROM supplier WHERE id = ?"
+        );
+        $stmt->execute([$supplierId]);
+        $isVatPayer = (bool) $stmt->fetchColumn();
+        if ($isVatPayer && $daysToDeadline >= -3 && $daysToDeadline <= 7) {
+            $sev = $daysToDeadline < 0 ? 'high' : ($daysToDeadline <= 2 ? 'high' : 'medium');
+            $items[] = [
+                'type'     => 'tax_deadline',
+                'severity' => $sev,
+                'title'    => 'DPH + KH za uplynulý měsíc',
+                'hint'     => $daysToDeadline < 0
+                    ? sprintf('Termín byl %d dní zpět — podej co nejdříve!', abs($daysToDeadline))
+                    : sprintf('Termín podání za %d %s (do %s)', $daysToDeadline,
+                        $daysToDeadline === 1 ? 'den' : ($daysToDeadline < 5 ? 'dny' : 'dní'),
+                        $deadlineDate),
+                'link'     => '/reports/dph',
+                'days'     => $daysToDeadline,
+            ];
+        }
+
+        // 5. Klienti dlouho bez objednávky (90+ dní) — top 3
+        $stmt = $pdo->prepare(
+            "WITH last_invoice AS (
+                SELECT client_id, MAX(issue_date) AS last_date
+                  FROM invoices
+                 WHERE supplier_id = ?
+                   AND status NOT IN ('draft', 'cancelled')
+                 GROUP BY client_id
+              )
+              SELECT COUNT(*) AS cnt FROM last_invoice li
+              JOIN clients c ON c.id = li.client_id
+             WHERE DATEDIFF(?, li.last_date) >= 90"
+        );
+        $stmt->execute([$supplierId, $today]);
+        $churnCount = (int) $stmt->fetchColumn();
+        if ($churnCount > 0) {
+            $items[] = [
+                'type'     => 'churn_risk',
+                'severity' => 'low',
+                'title'    => 'Kontaktuj neaktivní klienty',
+                'hint'     => sprintf('%d %s 90+ dní bez objednávky', $churnCount,
+                    $churnCount === 1 ? 'klient je' : 'klientů je'),
+                'link'     => '/crm',
+                'count'    => $churnCount,
+            ];
+        }
+
+        return ['items' => $items, 'total' => count($items)];
+    }
+
+    /**
+     * Cash flow forecast — predicted in/out per week dopředu.
+     *
+     * @return array{
+     *   currency: string,
+     *   weeks: list<array{week_start:string, week_end:string, in:float, out:float, net:float, running:float}>,
+     *   total_in: float, total_out: float, total_net: float
+     * }
+     */
+    public function cashFlowForecast(int $supplierId, int $weeksAhead = 4, string $currency = 'CZK'): array
+    {
+        $pdo = $this->db->pdo();
+        $today = new \DateTimeImmutable('today');
+
+        // Build week buckets
+        $weeks = [];
+        $running = 0.0;
+        $totalIn = 0.0;
+        $totalOut = 0.0;
+
+        for ($w = 0; $w < $weeksAhead; $w++) {
+            $weekStart = $today->modify("+{$w} weeks")->modify('Monday this week');
+            if ($w === 0) {
+                // První týden začíná dneškem (ne pondělím)
+                $weekStart = $today;
+            }
+            $weekEnd = $weekStart->modify('Sunday this week');
+            if ($w === 0 && $weekEnd < $weekStart) {
+                $weekEnd = $weekStart->modify('+6 days');
+            }
+
+            // In: nezaplacené vystavené faktury s due_date v tomto týdnu
+            $stmt = $pdo->prepare(
+                "SELECT COALESCE(SUM(i.total_with_vat), 0) AS amt
+                   FROM invoices i
+              LEFT JOIN currencies c ON c.id = i.currency_id
+                  WHERE i.supplier_id = ?
+                    AND i.status IN ('issued', 'sent', 'reminded')
+                    AND i.invoice_type != 'proforma'
+                    AND i.due_date BETWEEN ? AND ?
+                    AND COALESCE(c.code, 'CZK') = ?"
+            );
+            $stmt->execute([$supplierId, $weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d'), $currency]);
+            $in = (float) $stmt->fetchColumn();
+
+            // Out: nezaplacené přijaté faktury s due_date v tomto týdnu
+            $stmt = $pdo->prepare(
+                "SELECT COALESCE(SUM(pi.total_with_vat), 0) AS amt
+                   FROM purchase_invoices pi
+              LEFT JOIN currencies c ON c.id = pi.currency_id
+                  WHERE pi.supplier_id = ?
+                    AND pi.status IN ('received', 'booked')
+                    AND pi.due_date BETWEEN ? AND ?
+                    AND COALESCE(c.code, 'CZK') = ?"
+            );
+            $stmt->execute([$supplierId, $weekStart->format('Y-m-d'), $weekEnd->format('Y-m-d'), $currency]);
+            $out = (float) $stmt->fetchColumn();
+
+            $net = $in - $out;
+            $running += $net;
+            $totalIn += $in;
+            $totalOut += $out;
+
+            $weeks[] = [
+                'week_start' => $weekStart->format('Y-m-d'),
+                'week_end'   => $weekEnd->format('Y-m-d'),
+                'in'         => round($in, 2),
+                'out'        => round($out, 2),
+                'net'        => round($net, 2),
+                'running'    => round($running, 2),
+            ];
+        }
+
+        return [
+            'currency'  => $currency,
+            'weeks'     => $weeks,
+            'total_in'  => round($totalIn, 2),
+            'total_out' => round($totalOut, 2),
+            'total_net' => round($totalIn - $totalOut, 2),
+        ];
+    }
+
+    /**
+     * Late payment risk score per klient — kdo platí pozdě.
+     *
+     * Score 0-100:
+     *   0 = nikdy late
+     *   100 = vždy late, dlouho
+     *
+     * Formula: late_rate * 50 + min(50, avg_days_late) → cap 100
+     *
+     * @return list<array{
+     *   client_id:int, company_name:string, total_paid:int, late_count:int,
+     *   late_rate:float, avg_days_late:float, score:int, risk_level:string
+     * }>
+     */
+    public function lateRisk(int $supplierId, int $limit = 10): array
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "WITH paid_invoices AS (
+                SELECT i.client_id,
+                       i.due_date,
+                       i.paid_at,
+                       DATEDIFF(i.paid_at, i.due_date) AS days_late
+                  FROM invoices i
+                 WHERE i.supplier_id = ?
+                   AND i.status = 'paid'
+                   AND i.paid_at IS NOT NULL
+                   AND i.due_date IS NOT NULL
+                   AND i.invoice_type != 'proforma'
+              )
+              SELECT pi.client_id,
+                     c.company_name,
+                     COUNT(*) AS total_paid,
+                     SUM(CASE WHEN pi.days_late > 0 THEN 1 ELSE 0 END) AS late_count,
+                     AVG(CASE WHEN pi.days_late > 0 THEN pi.days_late ELSE NULL END) AS avg_days_late
+                FROM paid_invoices pi
+                JOIN clients c ON c.id = pi.client_id
+            GROUP BY pi.client_id, c.company_name
+              HAVING total_paid >= 2
+            ORDER BY (SUM(CASE WHEN pi.days_late > 0 THEN 1 ELSE 0 END) / COUNT(*)) DESC,
+                     avg_days_late DESC
+              LIMIT ?"
+        );
+        $stmt->execute([$supplierId, $limit]);
+        return array_map(function ($r) {
+            $totalPaid = (int) $r['total_paid'];
+            $lateCount = (int) $r['late_count'];
+            $lateRate = $totalPaid > 0 ? ($lateCount / $totalPaid) : 0.0;
+            $avgDaysLate = $r['avg_days_late'] !== null ? (float) $r['avg_days_late'] : 0.0;
+            $score = (int) min(100, $lateRate * 50 + min(50, $avgDaysLate));
+            $riskLevel = $score >= 50 ? 'high' : ($score >= 20 ? 'medium' : 'low');
+            return [
+                'client_id'     => (int) $r['client_id'],
+                'company_name'  => (string) $r['company_name'],
+                'total_paid'    => $totalPaid,
+                'late_count'    => $lateCount,
+                'late_rate'     => round($lateRate, 3),
+                'avg_days_late' => round($avgDaysLate, 1),
+                'score'         => $score,
+                'risk_level'    => $riskLevel,
+            ];
+        }, $stmt->fetchAll(\PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * Reminder effectiveness — funnel jaké % faktur platí po 1./2./3. upomínce.
+     *
+     * @return array{
+     *   total_paid: int,
+     *   no_reminder: int,        — zaplaceno bez upomínky
+     *   after_first: int,        — zaplaceno po 1. upomínce
+     *   after_second: int,       — po 2. (eskalovaně)
+     *   after_third_plus: int,   — po 3+ (vážně problémové)
+     *   never_paid: int,         — odeslané upomínky, ale dosud nezaplaceno
+     *   avg_reminders_to_paid: float
+     * }
+     */
+    public function reminderEffectiveness(int $supplierId, int $monthsBack = 12): array
+    {
+        $start = (new \DateTimeImmutable())->modify("-{$monthsBack} months")->format('Y-m-d');
+        $pdo = $this->db->pdo();
+
+        // Count reminders per invoice (z `invoices.reminder_count` denorm sloupce)
+        $stmt = $pdo->prepare(
+            "SELECT i.id AS invoice_id,
+                    i.status,
+                    COALESCE(i.reminder_count, 0) AS reminder_count
+               FROM invoices i
+              WHERE i.supplier_id = ?
+                AND i.status IN ('paid', 'sent', 'reminded')
+                AND i.invoice_type != 'proforma'
+                AND i.issue_date >= ?"
+        );
+        $stmt->execute([$supplierId, $start]);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $result = [
+            'total_paid' => 0, 'no_reminder' => 0, 'after_first' => 0,
+            'after_second' => 0, 'after_third_plus' => 0, 'never_paid' => 0,
+        ];
+        $reminderCountSumPaid = 0;
+        foreach ($rows as $r) {
+            $cnt = (int) $r['reminder_count'];
+            if ($r['status'] === 'paid') {
+                $result['total_paid']++;
+                $reminderCountSumPaid += $cnt;
+                if ($cnt === 0) $result['no_reminder']++;
+                elseif ($cnt === 1) $result['after_first']++;
+                elseif ($cnt === 2) $result['after_second']++;
+                else $result['after_third_plus']++;
+            } elseif ($cnt > 0) {
+                $result['never_paid']++;
+            }
+        }
+        $result['avg_reminders_to_paid'] = $result['total_paid'] > 0
+            ? round($reminderCountSumPaid / $result['total_paid'], 2)
+            : 0.0;
+
+        return $result;
+    }
+
+    /**
+     * Invoice → paid time histogram — distribuce (paid_at - issue_date) v dnech.
+     *
+     * Buckets: 0-7, 8-14, 15-30, 31-60, 61+
+     *
+     * @return array{
+     *   buckets: list<array{label:string, count:int, percent:float, min:int, max:?int}>,
+     *   total_invoices: int,
+     *   median_days: ?int,
+     *   p90_days: ?int
+     * }
+     */
+    public function paymentTimeHistogram(int $supplierId, int $monthsBack = 12): array
+    {
+        $start = (new \DateTimeImmutable())->modify("-{$monthsBack} months")->format('Y-m-d');
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT DATEDIFF(paid_at, issue_date) AS days
+               FROM invoices
+              WHERE supplier_id = ?
+                AND status = 'paid'
+                AND paid_at IS NOT NULL
+                AND invoice_type != 'proforma'
+                AND issue_date >= ?
+                AND paid_at >= issue_date"
+        );
+        $stmt->execute([$supplierId, $start]);
+        $days = array_map('intval', $stmt->fetchAll(\PDO::FETCH_COLUMN));
+
+        $total = count($days);
+        if ($total === 0) {
+            return ['buckets' => [], 'total_invoices' => 0, 'median_days' => null, 'p90_days' => null];
+        }
+
+        $buckets = [
+            ['label' => '0–7 dní', 'min' => 0, 'max' => 7, 'count' => 0],
+            ['label' => '8–14 dní', 'min' => 8, 'max' => 14, 'count' => 0],
+            ['label' => '15–30 dní', 'min' => 15, 'max' => 30, 'count' => 0],
+            ['label' => '31–60 dní', 'min' => 31, 'max' => 60, 'count' => 0],
+            ['label' => '61+ dní', 'min' => 61, 'max' => null, 'count' => 0],
+        ];
+        foreach ($days as $d) {
+            foreach ($buckets as $i => $b) {
+                if ($d >= $b['min'] && ($b['max'] === null || $d <= $b['max'])) {
+                    $buckets[$i]['count']++;
+                    break;
+                }
+            }
+        }
+        foreach ($buckets as $i => $b) {
+            $buckets[$i]['percent'] = round(($b['count'] / $total) * 100, 1);
+        }
+
+        sort($days);
+        $medianIdx = (int) floor($total / 2);
+        $p90Idx = (int) floor($total * 0.9);
+        return [
+            'buckets'        => $buckets,
+            'total_invoices' => $total,
+            'median_days'    => $days[$medianIdx] ?? null,
+            'p90_days'       => $days[$p90Idx] ?? null,
+        ];
+    }
 }

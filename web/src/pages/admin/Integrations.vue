@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { integrationsApi,
   type IdokladCredentialsStatus, type FakturoidCredentialsStatus,
   type AnthropicCredentialsStatus, type AiExtractResult, type ImportJob } from '@/api/integrations'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useToast } from '@/composables/useToast'
 import { apiErrorMessage } from '@/api/errors'
 
@@ -12,7 +12,12 @@ const { t } = useI18n()
 const toast = useToast()
 
 type Tab = 'idoklad' | 'fakturoid' | 'ai'
-const tab = ref<Tab>('idoklad')
+// Initial tab from ?tab=... query (default idoklad)
+const route = useRoute()
+const tab = ref<Tab>(((): Tab => {
+  const q = String(route.query.tab ?? '')
+  return q === 'fakturoid' || q === 'ai' ? q as Tab : 'idoklad'
+})())
 
 // ── iDoklad credentials state ─────────────────────────────────────────
 const idokladStatus = ref<IdokladCredentialsStatus | null>(null)

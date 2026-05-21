@@ -128,4 +128,48 @@ final class CrmDashboardAction
         $elapsedMs = (int) ((microtime(true) - $start) * 1000);
         return Json::ok($response, ['ok' => true, 'elapsed_ms' => $elapsedMs]);
     }
+
+    /** Action items widget — daily TODO list. */
+    public function actionItems(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        return Json::ok($response, $this->crm->actionItems($supplierId));
+    }
+
+    /** Cash flow forecast 4 týdny dopředu. */
+    public function cashFlowForecast(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        $q = $request->getQueryParams();
+        $weeks = max(1, min(12, (int) ($q['weeks'] ?? 4)));
+        $currency = isset($q['currency']) ? (string) $q['currency'] : 'CZK';
+        return Json::ok($response, $this->crm->cashFlowForecast($supplierId, $weeks, $currency));
+    }
+
+    /** Late payment risk score per klient. */
+    public function lateRisk(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        $q = $request->getQueryParams();
+        $limit = max(1, min(100, (int) ($q['limit'] ?? 10)));
+        return Json::ok($response, $this->crm->lateRisk($supplierId, $limit));
+    }
+
+    /** Reminder effectiveness funnel. */
+    public function reminderEffectiveness(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        $q = $request->getQueryParams();
+        $months = max(1, min(36, (int) ($q['months'] ?? 12)));
+        return Json::ok($response, $this->crm->reminderEffectiveness($supplierId, $months));
+    }
+
+    /** Invoice → paid time histogram. */
+    public function paymentTimeHistogram(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        $q = $request->getQueryParams();
+        $months = max(1, min(36, (int) ($q['months'] ?? 12)));
+        return Json::ok($response, $this->crm->paymentTimeHistogram($supplierId, $months));
+    }
 }

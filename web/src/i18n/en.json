@@ -4,7 +4,7 @@
     "dashboard": "Dashboard", "invoices": "Invoices", "clients": "Clients",
     "projects": "Projects", "stats": "Sales", "bank": "Bank", "system": "System", "section_taxes": "Taxes",
     "settings": "Settings", "supplier_current": "Supplier", "suppliers": "Suppliers", "codebooks": "Codebooks", "users": "Users",
-    "log": "Activity log", "cron_jobs": "Scheduled jobs", "exports": "Issued exports", "imports": "Imports", "imports_issued": "Imports (issued)", "imports_purchase": "Imports (purchase)", "integrations": "External integrations", "crm": "CRM", "reports_dph": "VAT return", "reports_kh": "Control statement", "reports_shv": "Recapitulative statement", "reports_income_tax": "Income tax", "reports_submissions": "Submission archive", "email_templates": "Email templates", "approvals": "Approvals", "updates": "Updates", "api_tokens": "API tokens", "recurring": "Recurring invoices", "help": "Help", "logout": "Sign out",
+    "log": "Activity log", "cron_jobs": "Scheduled jobs", "exports": "Issued exports", "imports": "Imports", "imports_issued": "Imports (issued)", "imports_purchase": "Imports (purchase)", "ai_import": "AI import", "integrations": "External integrations", "crm": "CRM", "reports_dph": "VAT return", "reports_kh": "Control statement", "reports_shv": "Recapitulative statement", "reports_income_tax": "Income tax", "reports_submissions": "Submission archive", "email_templates": "Email templates", "approvals": "Approvals", "updates": "Updates", "api_tokens": "API tokens", "recurring": "Recurring invoices", "help": "Help", "logout": "Sign out",
     "section_sales": "Sales", "section_purchase": "Purchases", "section_finance": "Finance", "section_clients": "Clients",
     "purchase_invoices": "Received invoices", "purchase_export": "Received exports", "vendors": "Vendors"
   },
@@ -1605,6 +1605,45 @@
   "crm": {
     "title": "CRM dashboard",
     "subtitle": "Revenue, costs, profit, top clients and vendors.",
+    "action_items": {
+      "title": "Action items"
+    },
+    "cash_flow": {
+      "title": "Cash flow forecast",
+      "next_n_weeks": "{n} weeks ahead",
+      "week": "Week",
+      "in": "In",
+      "out": "Out",
+      "net": "Net",
+      "running": "Running balance",
+      "total": "Total"
+    },
+    "late_risk": {
+      "title": "Late payment risk — clients",
+      "no_data": "Not enough data yet (clients need 2+ paid invoices)",
+      "client": "Client",
+      "late_rate": "Late %",
+      "avg_days": "Avg days late",
+      "score": "Score",
+      "late_paid": "paid late"
+    },
+    "payment_time": {
+      "title": "Invoice → paid time distribution",
+      "median": "Median",
+      "p90": "P90",
+      "total": "Total invoices",
+      "days": "days",
+      "no_data": "No paid invoices in period"
+    },
+    "reminder": {
+      "title": "Reminder effectiveness",
+      "no_reminder": "No reminder",
+      "after_first": "After 1st reminder",
+      "after_second": "After 2nd reminder",
+      "after_third_plus": "After 3+ reminders",
+      "never_paid": "Still unpaid",
+      "avg_reminders": "Avg reminders to paid"
+    },
     "last_n_months": "Last {n} months",
     "monthly_trend": "Monthly trend",
     "top_clients": "TOP clients",
