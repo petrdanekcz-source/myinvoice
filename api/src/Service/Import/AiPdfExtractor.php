@@ -193,6 +193,9 @@ final class AiPdfExtractor
                 'unit_price_without_vat' => (float) $line['unit_price_without_vat'],
                 'vat_rate_id'            => $this->matchVatRateId($vatRates, $rate) ?? $defaultVatRateId,
                 'order_index'            => $idx,
+                // Auto-klasifikace pro DPH přiznání / KH — bez ní by faktura nedorazila
+                // do výkazů (VatClassificationMapper SKIPNE řádky bez classification_code).
+                'vat_classification_code' => $this->defaultPurchaseClassification($rate),
             ];
         }
 
@@ -214,6 +217,16 @@ final class AiPdfExtractor
             'language'              => 'cs',
             'items'                 => $items,
         ];
+        // Dedup guard — jiné PDF stejné faktury (různý hash, stejné číslo+datum+vendor)
+        // by hodilo SQL 23000 duplicate key. Skipnout a vrátit existující ID.
+        $existingId = $this->repo->findIdByVendorInvoice(
+            $supplierId, $vendorId,
+            (string) $payload['vendor_invoice_number'],
+            (string) $payload['issue_date'],
+        );
+        if ($existingId !== null) {
+            return $existingId;
+        }
         $id = $this->repo->createDraft($payload, $userId, $supplierId);
         $this->repo->replaceItems($id, $items);
         $this->calc->recompute($id);
@@ -238,6 +251,10 @@ final class AiPdfExtractor
     private function markAlreadyPaid(int $id, int $supplierId): void
     {
         try {
+            // Při přechodu z draft musí faktura získat varsymbol (interní číslo dokladu) —
+            // ručně se to děje v TransitionPurchaseInvoiceStatusAction přes ensureVarsymbol().
+            // Tady přímým UPDATE varsymbol nevygenerujeme, takže zavoláme repo metodu napřed.
+            $this->repo->ensureVarsymbol($id, $supplierId);
             // Draft → paid přímý update (skip 'received' intermediate — faktura už existuje
             // v hotové stavu). UPDATE jen pokud aktuálně draft.
             $this->db->pdo()->prepare(
@@ -357,6 +374,26 @@ final class AiPdfExtractor
         $diff = round($rounded - $total, 2);
         // Sanity check — pouze pokud rozdíl je < 1 Kč (typicky zaokrouhlení nahoru/dolů)
         return abs($diff) < 1.0 ? $diff : 0.0;
+    }
+
+    /**
+     * Default VAT klasifikační kód pro přijatou fakturu podle sazby DPH.
+     *
+     * Mapování (purchase direction, tuzemsko, s nárokem na odpočet):
+     *   21% → '40' (Přijaté plnění v tuzemsku — základní)
+     *   12% → '41' (Přijaté plnění v tuzemsku — snížená)
+     *   0%  → null (osvobozeno bez nároku na odpočet)
+     *
+     * Bez code by faktura NEDORAZILA do DPH přiznání / KH — VatClassificationMapper
+     * `continue`s na řádcích kde `code` je NULL. Pro EU acquire / RC / dovoz si
+     * user musí kód změnit ručně v UI (default je tuzemsko, nejčastější případ).
+     */
+    private function defaultPurchaseClassification(float $rate): ?string
+    {
+        $r = round($rate);
+        if ($r >= 21) return '40';
+        if ($r >= 5 && $r <= 15) return '41';
+        return null;
     }
 
     private function sanitizeVendorNumber(string $vn): string

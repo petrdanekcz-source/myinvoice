@@ -461,9 +461,21 @@ final class PurchaseInvoiceRepository
 
         $vatRates = $this->vatRateMap();
 
+        // Reverse charge na parent faktuře — určuje klasifikační kód (RC → '5')
+        $rcStmt = $pdo->prepare('SELECT reverse_charge FROM purchase_invoices WHERE id = ?');
+        $rcStmt->execute([$purchaseInvoiceId]);
+        $reverseCharge = (bool) $rcStmt->fetchColumn();
+
         foreach (array_values($items) as $i => $item) {
             $vatRateId = (int) ($item['vat_rate_id'] ?? 0);
             $rate = $vatRates[$vatRateId] ?? 0.0;
+            // Auto-klasifikace pro DPH přiznání / KH — pokud caller (importer / manual create)
+            // neuvedl explicitní kód, default podle sazby + RC flagu. Bez tohohle by faktura
+            // NEDORAZILA do výkazů (VatClassificationMapper SKIPNE řádky s code=NULL).
+            $code = $item['vat_classification_code'] ?? null;
+            if ($code === null) {
+                $code = self::defaultClassificationCode($rate, $reverseCharge);
+            }
             $stmt->execute([
                 $purchaseInvoiceId,
                 (string) ($item['description'] ?? ''),
@@ -473,9 +485,29 @@ final class PurchaseInvoiceRepository
                 $vatRateId,
                 $rate,
                 (int) ($item['order_index'] ?? $i),
-                isset($item['vat_classification_code']) ? (string) $item['vat_classification_code'] : null,
+                $code !== null ? (string) $code : null,
             ]);
         }
+    }
+
+    /**
+     * Default vat_classification_code podle sazby + RC pro PŘIJATÉ faktury.
+     *
+     * Mapování (tuzemsko, s nárokem na odpočet — nejčastější CZ scénář):
+     *   RC + 21%      → '5'  (Přenesená povinnost tuzemsko)
+     *   21% standard  → '40' (Přijaté plnění tuzemsko — základní)
+     *   12% standard  → '41' (Přijaté plnění tuzemsko — snížená)
+     *   0% nebo jiné  → null (EU acquire / dovoz / osvobozeno — user si nastaví ručně)
+     *
+     * Pro EU acquire / dovoz si user musí kód změnit ručně v UI (kód 23, 24, 25).
+     */
+    public static function defaultClassificationCode(float $rate, bool $reverseCharge): ?string
+    {
+        $r = (int) round($rate);
+        if ($reverseCharge && $r >= 21) return '5';
+        if ($r >= 21)                   return '40';
+        if ($r >= 5 && $r <= 15)        return '41';
+        return null;
     }
 
     /**
@@ -600,6 +632,25 @@ final class PurchaseInvoiceRepository
             'SELECT id FROM purchase_invoices WHERE supplier_id = ? AND pdf_hash = ? LIMIT 1'
         );
         $stmt->execute([$supplierId, $sha256]);
+        $id = $stmt->fetchColumn();
+        return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * Vrátí ID faktury s daným vendor_invoice_number u (tenant, vendor, issue_date) tuple,
+     * nebo null pokud neexistuje. Respektuje UNIQUE KEY uq_pi_vendor_invoice — caller
+     * tím detekuje "tahle faktura už je v systému" před voláním createDraft (které by
+     * jinak hodilo SQLSTATE 23000 duplicate key).
+     */
+    public function findIdByVendorInvoice(int $supplierId, int $vendorId, string $vendorInvoiceNumber, string $issueDate): ?int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            'SELECT id FROM purchase_invoices
+              WHERE supplier_id = ? AND vendor_id = ?
+                AND vendor_invoice_number = ? AND issue_date = ?
+              LIMIT 1'
+        );
+        $stmt->execute([$supplierId, $vendorId, $vendorInvoiceNumber, $issueDate]);
         $id = $stmt->fetchColumn();
         return $id === false ? null : (int) $id;
     }

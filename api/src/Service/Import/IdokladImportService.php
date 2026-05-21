@@ -47,6 +47,7 @@ final class IdokladImportService
         private readonly PurchaseInvoiceCalculator $purCalc,
         private readonly Config $config,
         private readonly LoggerInterface $logger,
+        private readonly PurchaseInvoiceCnbApplier $cnbApplier,
     ) {}
 
     /**
@@ -411,10 +412,29 @@ final class IdokladImportService
             'items'                 => $items,
         ];
 
+        // Dedup guard — re-import stejné faktury (typicky při opakovaném pullu z iDokladu)
+        // by jinak hodil SQL 23000 duplicate key. Vrátíme existující ID.
+        $existingId = $this->purchaseRepo->findIdByVendorInvoice(
+            $supplierId, $vendorId,
+            (string) $payload['vendor_invoice_number'],
+            (string) $payload['issue_date'],
+        );
+        if ($existingId !== null) {
+            return $existingId;
+        }
+
         $id = $this->purchaseRepo->createDraft($payload, $userId, $supplierId);
         if (!empty($items)) {
             $this->purchaseRepo->replaceItems($id, $items);
         }
+        // Auto-ČNB kurz pro non-CZK fakturu pokud iDoklad neobsahoval explicitní kurz
+        $this->cnbApplier->applyIfMissing(
+            $id,
+            $supplierId,
+            (string) ($i['CurrencyCode'] ?? 'CZK'),
+            (string) ($payload['tax_date'] ?? $payload['issue_date'] ?? ''),
+            $payload['exchange_rate'] ?? null,
+        );
         return $id;
     }
 

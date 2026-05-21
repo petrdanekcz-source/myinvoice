@@ -31,6 +31,7 @@ final class IsdocToPurchaseInvoiceMapper
         private readonly PurchaseInvoiceRepository $repo,
         private readonly PurchaseInvoiceCalculator $calc,
         private readonly ClientResolver $clientResolver,
+        private readonly PurchaseInvoiceCnbApplier $cnbApplier,
     ) {}
 
     /**
@@ -96,14 +97,41 @@ final class IsdocToPurchaseInvoiceMapper
             'items'                 => $items,
         ];
 
+        // Dedup guard — pokud (supplier, vendor, vendor_invoice_number, issue_date) tuple
+        // už v systému je, vrátíme existující ID místo házení SQL duplicate key error.
+        $existingId = $this->repo->findIdByVendorInvoice(
+            $supplierId,
+            $resolved['id'],
+            (string) $payload['vendor_invoice_number'],
+            (string) $payload['issue_date'],
+        );
+        if ($existingId !== null) {
+            return [
+                'purchase_invoice_id' => $existingId,
+                'vendor_id'           => $resolved['id'],
+                'vendor_created'      => $resolved['created'],
+                'duplicate'           => true,
+            ];
+        }
+
         $id = $this->repo->createDraft($payload, $userId, $supplierId);
         $this->repo->replaceItems($id, $items);
         $this->calc->recompute($id);
+
+        // Auto-ČNB kurz pro non-CZK fakturu pokud ISDOC neobsahoval explicitní kurz
+        $this->cnbApplier->applyIfMissing(
+            $id,
+            $supplierId,
+            (string) ($parsed['currency'] ?? 'CZK'),
+            (string) ($parsed['tax_date'] ?? $parsed['issue_date'] ?? ''),
+            isset($parsed['exchange_rate']) ? (float) $parsed['exchange_rate'] : null,
+        );
 
         return [
             'purchase_invoice_id' => $id,
             'vendor_id'           => $resolved['id'],
             'vendor_created'      => $resolved['created'],
+            'duplicate'           => false,
         ];
     }
 

@@ -2,7 +2,7 @@
 
 [🌐 MyInvoice.cz](https://myinvoice.cz/) · [⭐ GitHub](https://github.com/radekhulan/myinvoice) · [📦 GHCR Docker](https://github.com/radekhulan/myinvoice/pkgs/container/myinvoice)
 
-> Verze: 2.1.0 · Datum: 2026-05-21 · Vyvíjí [MyWebdesign.cz s.r.o.](https://mywebdesign.cz/)
+> Verze: 4.0.0 · Datum: 2026-05-22 · Vyvíjí [MyWebdesign.cz s.r.o.](https://mywebdesign.cz/)
 
 Vítej v manuálu k fakturačnímu systému **MyInvoice.cz**. Manuál pokrývá vše, co
 v aplikaci uděláš — od prvního přihlášení, přes vystavení faktury a její

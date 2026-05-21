@@ -83,11 +83,17 @@ final class ClientRepository
                   JOIN currencies cur ON cur.id = c.currency_default_id
              LEFT JOIN client_revenue_cache crc ON crc.client_id = c.id AND crc.currency_id = c.currency_default_id
              LEFT JOIN (
+                       -- Costs sumarizace přes vendory. Multi-currency:
+                       -- EUR/USD/... přepočítáme na CZK přes pi.exchange_rate (CNB k DUZP).
+                       -- Bez exchange_rate (CZK řádky) je multiplier 1.
+                       -- Výsledek `costs` je tedy v CZK (tenant base ccy), nezávisle na
+                       -- vendor.currency_default. UI zobrazí jako Kč.
                        SELECT pi.vendor_id,
-                              SUM(pi.total_with_vat) AS costs,
+                              SUM(pi.total_with_vat * COALESCE(IF(cur.code = 'CZK', 1, pi.exchange_rate), 1)) AS costs,
                               COUNT(*) AS purchase_count,
                               MAX(pi.issue_date) AS last_purchase_date
                          FROM purchase_invoices pi
+                    LEFT JOIN currencies cur ON cur.id = pi.currency_id
                         WHERE pi.supplier_id = ?
                           AND pi.status NOT IN ('draft', 'cancelled')
                      GROUP BY pi.vendor_id

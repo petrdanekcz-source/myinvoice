@@ -46,6 +46,7 @@ final class FakturoidImportService
         private readonly PurchaseInvoiceCalculator $purCalc,
         private readonly Config $config,
         private readonly LoggerInterface $logger,
+        private readonly PurchaseInvoiceCnbApplier $cnbApplier,
     ) {}
 
     public function run(int $jobId): void
@@ -340,8 +341,27 @@ final class FakturoidImportService
             'language'              => 'cs',
             'items'                 => $items,
         ];
+        // Dedup guard — re-import stejné faktury z Fakturoidu (typicky opakovaný pull)
+        // by jinak hodil SQL 23000 duplicate key. Vrátíme existující ID.
+        $existingId = $this->purchaseRepo->findIdByVendorInvoice(
+            $supplierId, $vendorId,
+            (string) $payload['vendor_invoice_number'],
+            (string) $payload['issue_date'],
+        );
+        if ($existingId !== null) {
+            return $existingId;
+        }
+
         $id = $this->purchaseRepo->createDraft($payload, $userId, $supplierId);
         if (!empty($items)) $this->purchaseRepo->replaceItems($id, $items);
+        // Auto-ČNB kurz pro non-CZK fakturu pokud Fakturoid neobsahoval explicitní kurz
+        $this->cnbApplier->applyIfMissing(
+            $id,
+            $supplierId,
+            (string) ($e['currency'] ?? 'CZK'),
+            (string) ($payload['tax_date'] ?? $payload['issue_date'] ?? ''),
+            $payload['exchange_rate'] ?? null,
+        );
         return $id;
     }
 

@@ -25,7 +25,10 @@ useHotkey('ctrl+n', (e) => { e.preventDefault(); router.push('/purchase-invoices
 
 const groups = ref<PurchaseMonthGroup[]>([])
 const total = ref(0)
+const page = ref(1)
+const pages = ref(1)
 const loading = ref(true)
+const loadingMore = ref(false)
 const error = ref('')
 
 // Filtry
@@ -67,10 +70,42 @@ watch(search, () => {
   searchTimeout = setTimeout(load, 300)
 })
 
-async function load() {
-  loading.value = true
+function mergeGroups(existing: PurchaseMonthGroup[], incoming: PurchaseMonthGroup[]): PurchaseMonthGroup[] {
+  const byMonth = new Map<string, PurchaseMonthGroup>()
+  for (const g of existing) byMonth.set(g.month, { ...g, invoices: [...g.invoices], totals_per_currency: [...g.totals_per_currency] })
+  for (const g of incoming) {
+    const cur = byMonth.get(g.month)
+    if (!cur) {
+      byMonth.set(g.month, { ...g, invoices: [...g.invoices], totals_per_currency: [...g.totals_per_currency] })
+      continue
+    }
+    const seenIds = new Set(cur.invoices.map(i => i.id))
+    for (const inv of g.invoices) if (!seenIds.has(inv.id)) cur.invoices.push(inv)
+    cur.count = cur.invoices.length
+    for (const t of g.totals_per_currency) {
+      const found = cur.totals_per_currency.find(x => x.currency === t.currency)
+      if (found) {
+        found.without_vat = (found.without_vat ?? 0) + (t.without_vat ?? 0)
+        found.vat = (found.vat ?? 0) + (t.vat ?? 0)
+        found.with_vat = (found.with_vat ?? 0) + (t.with_vat ?? 0)
+      } else {
+        cur.totals_per_currency.push({ ...t })
+      }
+    }
+  }
+  return Array.from(byMonth.values()).sort((a, b) => b.month.localeCompare(a.month))
+}
+
+async function load(reset = true) {
+  if (reset) {
+    loading.value = true
+    page.value = 1
+    selectedIds.value = []
+  } else {
+    loadingMore.value = true
+    page.value++
+  }
   error.value = ''
-  selectedIds.value = []
   try {
     const res = await purchaseInvoicesApi.listGrouped({
       status:        statusFilter.value || undefined,
@@ -83,14 +118,20 @@ async function load() {
       unpaid_only:   unpaidOnly.value   || undefined,
       overdue:       overdueOnly.value  || undefined,
       q:             search.value       || undefined,
-      per_page: 200,
+      page: page.value,
     })
-    groups.value = res.data
+    if (reset) {
+      groups.value = res.data
+    } else {
+      groups.value = mergeGroups(groups.value, res.data)
+    }
     total.value = res.meta.total
+    pages.value = res.meta.pages ?? 1
   } catch (e) {
     error.value = apiErrorMessage(e)
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -470,6 +511,14 @@ async function bulkDelete() {
           </div>
         </div>
       </section>
+
+      <div v-if="page < pages" class="text-center mt-3">
+        <button @click="load(false)" :disabled="loadingMore"
+          class="cursor-pointer h-10 px-5 text-sm bg-primary-600 hover:bg-primary-700 text-white font-medium disabled:opacity-50 rounded-md inline-flex items-center gap-2 shadow-sm">
+          {{ loadingMore ? t('common.loading_more') : t('common.load_more') }}
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
