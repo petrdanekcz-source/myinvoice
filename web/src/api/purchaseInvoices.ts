@@ -310,4 +310,16 @@ export const purchaseInvoicesApi = {
 
   scanInbox: (dryRun = false) =>
     api.post<InboxScanResult>('/purchase-invoices/scan-inbox', { dry_run: dryRun }).then(r => r.data),
+
+  /**
+   * Export ZIP s archivovanými vendor PDF za měsíc.
+   * Priorita: pokud purchase_invoice.pdf_path je set, použije ho; jinak fakturu skipne.
+   * Vrací URL pro přímou navigaci (axios by stáhl jako blob).
+   */
+  exportUrl: (month: string, dateBy: 'tax' | 'issue' | 'received' = 'tax') => {
+    const sid = localStorage.getItem('myinvoice.current_supplier_id')
+    const params = new URLSearchParams({ month, format: 'pdf-zip', date_by: dateBy })
+    if (sid && /^\d+$/.test(sid)) params.set('supplier_id', sid)
+    return `/api/purchase-invoices/export?${params.toString()}`
+  },
 }

@@ -34,6 +34,17 @@ const scanRunning = ref(false)
 const scanResult = ref<InboxScanResult | null>(null)
 const scanModalOpen = ref(false)
 
+// Export ZIP state
+const exportMonth = ref<string>((() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+})())
+const showExportPicker = ref(false)
+function triggerExport() {
+  window.open(purchaseInvoicesApi.exportUrl(exportMonth.value, 'tax'), '_blank')
+  showExportPicker.value = false
+}
+
 onMounted(load)
 watch([filterStatus, filterKind, filterUnpaid, filterOverdue, searchQ], () => {
   if (loadDebounce) clearTimeout(loadDebounce)
@@ -101,7 +112,13 @@ const isOverdue = (dueDate: string, status: PurchaseInvoiceStatus): boolean => {
         <h1 class="text-2xl font-semibold">{{ t('purchase_invoice.title') }}</h1>
         <p class="text-sm text-neutral-500">{{ t('purchase_invoice.subtitle') }}</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 relative">
+        <button
+          type="button"
+          @click="showExportPicker = !showExportPicker"
+          class="cursor-pointer px-3 py-1.5 text-sm border border-neutral-300 rounded-md hover:bg-neutral-50"
+          :title="t('purchase_invoice.export.title')"
+        >📦 {{ t('purchase_invoice.export.btn') }}</button>
         <button
           type="button"
           @click="runScan"
@@ -118,6 +135,27 @@ const isOverdue = (dueDate: string, status: PurchaseInvoiceStatus): boolean => {
         >
           {{ t('purchase_invoice.new') }}
         </RouterLink>
+
+        <!-- Mini export picker popover -->
+        <div v-if="showExportPicker"
+             class="absolute right-0 top-full mt-2 w-72 bg-white border border-neutral-200 rounded-lg shadow-lg p-4 z-20">
+          <label class="block text-sm font-medium text-neutral-700 mb-1">
+            {{ t('purchase_invoice.export.month_label') }}
+          </label>
+          <input v-model="exportMonth" type="month"
+                 class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm" />
+          <p class="text-xs text-neutral-500 mt-2">{{ t('purchase_invoice.export.hint') }}</p>
+          <div class="flex items-center justify-end gap-2 mt-3">
+            <button type="button" @click="showExportPicker = false"
+                    class="cursor-pointer px-3 h-9 text-sm border border-neutral-300 rounded-md hover:bg-neutral-50">
+              {{ t('common.cancel') }}
+            </button>
+            <button type="button" @click="triggerExport"
+                    class="cursor-pointer px-3 h-9 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-md">
+              {{ t('purchase_invoice.export.download') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

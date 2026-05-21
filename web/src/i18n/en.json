@@ -149,6 +149,13 @@
       "status_label": "Status",
       "reason": "Reason"
     },
+    "export": {
+      "title": "Download ZIP with vendor PDFs for the month",
+      "btn": "Export",
+      "month_label": "Month (by tax date)",
+      "hint": "Exports a ZIP with original vendor PDFs for the selected month. Invoices without archived PDF are skipped.",
+      "download": "Download"
+    },
     "filters": {
       "all_statuses": "All statuses",
       "all_kinds": "All types",

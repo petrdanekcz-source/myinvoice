@@ -149,6 +149,13 @@
       "status_label": "Stav",
       "reason": "Důvod"
     },
+    "export": {
+      "title": "Stáhnout ZIP s vendor PDF za měsíc",
+      "btn": "Export",
+      "month_label": "Měsíc (podle DUZP)",
+      "hint": "Vyexportuje ZIP s originálními PDF od dodavatelů za zvolený měsíc. Faktury bez archivovaného PDF se přeskočí.",
+      "download": "Stáhnout"
+    },
     "filters": {
       "all_statuses": "Všechny stavy",
       "all_kinds": "Všechny typy",
