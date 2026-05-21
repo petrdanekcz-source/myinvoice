@@ -156,7 +156,7 @@ const addingCurrency = ref(false)
 async function addCurrency() {
   const code = newCurrencyCode.value.trim().toUpperCase()
   if (!/^[A-Z]{3}$/.test(code)) {
-    toast.error('Zadej platný ISO 4217 kód (3 písmena: USD, GBP, …)')
+    toast.error(t('purchase_invoice.validation.invalid_currency_iso'))
     return
   }
   if (currencies.value.some(c => c.code === code)) {

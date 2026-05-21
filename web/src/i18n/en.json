@@ -4,7 +4,7 @@
     "dashboard": "Dashboard", "invoices": "Invoices", "clients": "Clients",
     "projects": "Projects", "stats": "Sales", "bank": "Bank", "system": "System", "section_taxes": "Taxes",
     "settings": "Settings", "supplier_current": "Supplier", "suppliers": "Suppliers", "codebooks": "Codebooks", "users": "Users",
-    "log": "Activity log", "cron_jobs": "Scheduled jobs", "exports": "Exports", "imports": "Imports", "imports_issued": "Imports (issued)", "imports_purchase": "Imports (purchase)", "integrations": "External integrations", "crm": "CRM", "reports_dph": "VAT return", "reports_kh": "Control statement", "reports_shv": "Recapitulative statement", "reports_income_tax": "Income tax", "email_templates": "Email templates", "approvals": "Approvals", "updates": "Updates", "api_tokens": "API tokens", "recurring": "Recurring invoices", "help": "Help", "logout": "Sign out",
+    "log": "Activity log", "cron_jobs": "Scheduled jobs", "exports": "Exports", "imports": "Imports", "imports_issued": "Imports (issued)", "imports_purchase": "Imports (purchase)", "integrations": "External integrations", "crm": "CRM", "reports_dph": "VAT return", "reports_kh": "Control statement", "reports_shv": "Recapitulative statement", "reports_income_tax": "Income tax", "reports_submissions": "Submission archive", "email_templates": "Email templates", "approvals": "Approvals", "updates": "Updates", "api_tokens": "API tokens", "recurring": "Recurring invoices", "help": "Help", "logout": "Sign out",
     "section_sales": "Sales", "section_purchase": "Purchases", "section_finance": "Finance", "section_clients": "Clients",
     "purchase_invoices": "Received invoices", "purchase_export": "Export", "vendors": "Vendors"
   },
@@ -208,6 +208,7 @@
       "vendor_invoice_number_required": "Vendor invoice number is required.",
       "date_invalid": "Invalid date.",
       "currency_required": "Select invoice currency.",
+      "invalid_currency_iso": "Enter valid ISO 4217 code (3 letters: USD, GBP, …)",
       "items_required": "Add at least one item."
     },
     "classification": {
@@ -1510,6 +1511,26 @@
       "amount": "Amount",
       "no_data": "No EU supplies in this month (no issued invoices with VAT classification 20/22 for EU clients with VAT ID).",
       "note": "Recapitulative statement is submitted by VAT payers with at least 1 EU supply in the month. Identified persons (non-payers) submit when B2B EU services or goods purchases over the limit."
+    },
+    "submissions": {
+      "title": "EPO XML submission archive",
+      "subtitle": "History of all generated XML reports (DPH/KH/SH/DPFO/DPPO). Records serve for audit accountability — actual submission happens on the EPO portal of MFČR outside MyInvoice.",
+      "empty": "No records yet. Download your first report and it will appear here.",
+      "form": "Form",
+      "form_dphdp3": "VAT return",
+      "form_dphkh1": "Control statement",
+      "form_dphshv": "Recapitulative statement",
+      "form_dpfdp5": "Income tax FO",
+      "form_dppdp9": "Income tax PO",
+      "period": "Period",
+      "generated_at": "Generated",
+      "size": "Size",
+      "status_passed": "OK",
+      "status_failed": "Errors",
+      "status_skipped": "No schema",
+      "download_xml": "Download XML",
+      "delete_confirm": "Delete archived record? This cannot be undone.",
+      "records": "records"
     },
     "income_tax": {
       "title": "Income tax (DPFO / DPPO)",

@@ -4,7 +4,7 @@
     "dashboard": "Přehled", "invoices": "Faktury", "clients": "Klienti",
     "projects": "Zakázky", "stats": "Tržby", "bank": "Banka", "system": "Systém", "section_taxes": "Daně",
     "settings": "Nastavení", "supplier_current": "Dodavatel", "suppliers": "Dodavatelé", "codebooks": "Číselníky", "users": "Uživatelé",
-    "log": "Log", "cron_jobs": "Plánované úlohy", "exports": "Exporty", "imports": "Importy", "imports_issued": "Import vystavených", "imports_purchase": "Import přijatých", "integrations": "Externí integrace", "crm": "CRM", "reports_dph": "DPH přiznání", "reports_kh": "Kontrolní hlášení", "reports_shv": "Souhrnné hlášení", "reports_income_tax": "Daň z příjmů", "email_templates": "Email šablony", "approvals": "Schvalování", "updates": "Aktualizace", "api_tokens": "API tokeny", "recurring": "Pravidelné fakturace", "help": "Nápověda", "logout": "Odhlásit",
+    "log": "Log", "cron_jobs": "Plánované úlohy", "exports": "Exporty", "imports": "Importy", "imports_issued": "Import vystavených", "imports_purchase": "Import přijatých", "integrations": "Externí integrace", "crm": "CRM", "reports_dph": "DPH přiznání", "reports_kh": "Kontrolní hlášení", "reports_shv": "Souhrnné hlášení", "reports_income_tax": "Daň z příjmů", "reports_submissions": "Archiv podání", "email_templates": "Email šablony", "approvals": "Schvalování", "updates": "Aktualizace", "api_tokens": "API tokeny", "recurring": "Pravidelné fakturace", "help": "Nápověda", "logout": "Odhlásit",
     "section_sales": "Prodej", "section_purchase": "Nákup", "section_finance": "Finance", "section_clients": "Klienti",
     "purchase_invoices": "Přijaté faktury", "purchase_export": "Export", "vendors": "Dodavatelé"
   },
@@ -208,6 +208,7 @@
       "vendor_invoice_number_required": "Číslo dokladu od dodavatele je povinné.",
       "date_invalid": "Neplatné datum.",
       "currency_required": "Vyber měnu faktury.",
+      "invalid_currency_iso": "Zadej platný ISO 4217 kód (3 písmena: USD, GBP, …)",
       "items_required": "Přidej alespoň jednu položku."
     },
     "classification": {
@@ -1510,6 +1511,26 @@
       "amount": "Hodnota",
       "no_data": "V tomto měsíci nejsou žádné EU dodávky (žádné vystavené faktury s VAT klasifikací 20/22 pro EU klienty s DIČ).",
       "note": "Souhrnné hlášení podávají plátci DPH s alespoň 1 EU dodávkou v měsíci. Identifikované osoby (neplátci) podávají při B2B EU službách nebo nákupech zboží z EU nad limit."
+    },
+    "submissions": {
+      "title": "Archiv podání EPO XML",
+      "subtitle": "Historie všech vygenerovaných XML výkazů (DPH/KH/SH/DPFO/DPPO). Záznamy slouží pro audit accountability — faktické podání proběhne na portálu EPO MFČR mimo MyInvoice.",
+      "empty": "Žádné záznamy. Stáhněte první výkaz a vrátí se sem.",
+      "form": "Formulář",
+      "form_dphdp3": "DPH přiznání",
+      "form_dphkh1": "Kontrolní hlášení",
+      "form_dphshv": "Souhrnné hlášení",
+      "form_dpfdp5": "Daň z příjmů FO",
+      "form_dppdp9": "Daň z příjmů PO",
+      "period": "Období",
+      "generated_at": "Vygenerováno",
+      "size": "Velikost",
+      "status_passed": "OK",
+      "status_failed": "Chyby",
+      "status_skipped": "Bez schématu",
+      "download_xml": "Stáhnout XML",
+      "delete_confirm": "Smazat archivovaný záznam? Tato akce nelze vrátit.",
+      "records": "záznamů"
     },
     "income_tax": {
       "title": "Daň z příjmů (DPFO / DPPO)",
