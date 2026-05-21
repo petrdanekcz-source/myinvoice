@@ -4,9 +4,9 @@
     "dashboard": "Dashboard", "invoices": "Invoices", "clients": "Clients",
     "projects": "Projects", "stats": "Sales", "bank": "Bank", "system": "System", "section_taxes": "Taxes",
     "settings": "Settings", "supplier_current": "Supplier", "suppliers": "Suppliers", "codebooks": "Codebooks", "users": "Users",
-    "log": "Activity log", "cron_jobs": "Scheduled jobs", "exports": "Exports", "imports": "Imports", "imports_issued": "Imports (issued)", "imports_purchase": "Imports (purchase)", "integrations": "External integrations", "crm": "CRM", "reports_dph": "VAT return", "reports_kh": "Control statement", "reports_shv": "Recapitulative statement", "reports_income_tax": "Income tax", "reports_submissions": "Submission archive", "email_templates": "Email templates", "approvals": "Approvals", "updates": "Updates", "api_tokens": "API tokens", "recurring": "Recurring invoices", "help": "Help", "logout": "Sign out",
+    "log": "Activity log", "cron_jobs": "Scheduled jobs", "exports": "Issued exports", "imports": "Imports", "imports_issued": "Imports (issued)", "imports_purchase": "Imports (purchase)", "integrations": "External integrations", "crm": "CRM", "reports_dph": "VAT return", "reports_kh": "Control statement", "reports_shv": "Recapitulative statement", "reports_income_tax": "Income tax", "reports_submissions": "Submission archive", "email_templates": "Email templates", "approvals": "Approvals", "updates": "Updates", "api_tokens": "API tokens", "recurring": "Recurring invoices", "help": "Help", "logout": "Sign out",
     "section_sales": "Sales", "section_purchase": "Purchases", "section_finance": "Finance", "section_clients": "Clients",
-    "purchase_invoices": "Received invoices", "purchase_export": "Export", "vendors": "Vendors"
+    "purchase_invoices": "Received invoices", "purchase_export": "Received exports", "vendors": "Vendors"
   },
   "purchase_invoice": {
     "title": "Received invoices",

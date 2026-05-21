@@ -4,9 +4,9 @@
     "dashboard": "Přehled", "invoices": "Faktury", "clients": "Klienti",
     "projects": "Zakázky", "stats": "Tržby", "bank": "Banka", "system": "Systém", "section_taxes": "Daně",
     "settings": "Nastavení", "supplier_current": "Dodavatel", "suppliers": "Dodavatelé", "codebooks": "Číselníky", "users": "Uživatelé",
-    "log": "Log", "cron_jobs": "Plánované úlohy", "exports": "Exporty", "imports": "Importy", "imports_issued": "Import vystavených", "imports_purchase": "Import přijatých", "integrations": "Externí integrace", "crm": "CRM", "reports_dph": "DPH přiznání", "reports_kh": "Kontrolní hlášení", "reports_shv": "Souhrnné hlášení", "reports_income_tax": "Daň z příjmů", "reports_submissions": "Archiv podání", "email_templates": "Email šablony", "approvals": "Schvalování", "updates": "Aktualizace", "api_tokens": "API tokeny", "recurring": "Pravidelné fakturace", "help": "Nápověda", "logout": "Odhlásit",
+    "log": "Log", "cron_jobs": "Plánované úlohy", "exports": "Export vystavených", "imports": "Importy", "imports_issued": "Import vystavených", "imports_purchase": "Import přijatých", "integrations": "Externí integrace", "crm": "CRM", "reports_dph": "DPH přiznání", "reports_kh": "Kontrolní hlášení", "reports_shv": "Souhrnné hlášení", "reports_income_tax": "Daň z příjmů", "reports_submissions": "Archiv podání", "email_templates": "Email šablony", "approvals": "Schvalování", "updates": "Aktualizace", "api_tokens": "API tokeny", "recurring": "Pravidelné fakturace", "help": "Nápověda", "logout": "Odhlásit",
     "section_sales": "Prodej", "section_purchase": "Nákup", "section_finance": "Finance", "section_clients": "Klienti",
-    "purchase_invoices": "Přijaté faktury", "purchase_export": "Export", "vendors": "Dodavatelé"
+    "purchase_invoices": "Přijaté faktury", "purchase_export": "Export přijatých", "vendors": "Dodavatelé"
   },
   "purchase_invoice": {
     "title": "Přijaté faktury",
