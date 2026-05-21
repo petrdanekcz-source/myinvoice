@@ -394,7 +394,7 @@ function fieldErr(key: string): string | null {
 </script>
 
 <template>
-  <div class="space-y-4 max-w-4xl mx-auto">
+  <div class="space-y-4 max-w-5xl">
     <header class="flex items-center justify-between">
       <h1 class="text-xl font-semibold">
         {{ isEdit ? t('purchase_invoice.title_edit') : t('purchase_invoice.title_new') }}
