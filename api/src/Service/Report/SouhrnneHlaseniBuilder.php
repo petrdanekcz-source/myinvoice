@@ -154,7 +154,11 @@ final class SouhrnneHlaseniBuilder
     private function collectEuSupplies(int $supplierId, string $start, string $end): array
     {
         // Build IN clause z kódů 20, 22, 21 (a custom EU kódy)
-        $codes = implode(',', array_map(fn ($c) => "'" . addslashes($c) . "'", array_keys(self::VAT_CODE_TO_SH_TYPE)));
+        // array_keys() vrací int|string podle obsahu klíčů — castovat na string před addslashes()
+        $codes = implode(',', array_map(
+            fn ($c) => "'" . addslashes((string) $c) . "'",
+            array_keys(self::VAT_CODE_TO_SH_TYPE),
+        ));
 
         $sql = "
             SELECT cnt.iso2 AS country_iso2,
