@@ -334,11 +334,18 @@ async function uploadPdfToInvoice(id: number, file: File) {
   pdfUploading.value = true
   try {
     const result = await purchaseInvoicesApi.uploadPdf(id, file)
+    // Debug: pokud size přijde 0 nebo name null, log pro diagnózu (OPcache stale code?)
+    if (!result || !result.pdf_original_name || !result.pdf_size_bytes) {
+      // eslint-disable-next-line no-console
+      console.warn('[uploadPdf] suspicious response:', result)
+    }
     existingPdf.value = {
       path: result.pdf_path,
       hash: result.pdf_hash,
-      size: Number(result.pdf_size_bytes) || 0,
-      name: result.pdf_original_name,
+      // Fallback na lokální file.size, protože backend někdy vrací 0 (PSR-7 Slim 4)
+      size: Number(result.pdf_size_bytes) || file.size || 0,
+      // Fallback na file.name, protože backend někdy vrací prázdný string
+      name: result.pdf_original_name || file.name,
       uploadedAt: new Date().toISOString(),
     }
     dropzoneVisible.value = false
