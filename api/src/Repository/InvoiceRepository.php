@@ -450,19 +450,29 @@ final class InvoiceRepository
 
         $vatRates = $this->loadVatRates();
 
-        // Reverse charge na parent faktuře — relevantní pro správný classification code
-        // (sale s RC je vzácné, ale lze; pro EU dodávky je RC=0 ale klasifikace jiná —
-        // tu si user nastaví ručně, default je tuzemsko).
-        $rcStmt = $pdo->prepare('SELECT reverse_charge FROM invoices WHERE id = ?');
-        $rcStmt->execute([$invoiceId]);
-        $reverseCharge = (bool) $rcStmt->fetchColumn();
+        // Reverse charge + země klienta — určuje klasifikační kód:
+        //   CZ klient → '1'/'2'/'3' (tuzemsko podle sazby)
+        //   EU klient s 0% → '22' (služby) — typický B2B reverse charge do EU
+        //   non-EU klient s 0% → '26' (vývoz do 3. země)
+        $metaStmt = $pdo->prepare(
+            'SELECT i.reverse_charge, co.iso2
+               FROM invoices i
+               JOIN clients c    ON c.id  = i.client_id
+               JOIN countries co ON co.id = c.country_id
+              WHERE i.id = ?'
+        );
+        $metaStmt->execute([$invoiceId]);
+        $meta = $metaStmt->fetch(PDO::FETCH_ASSOC) ?: ['reverse_charge' => 0, 'iso2' => 'CZ'];
+        $reverseCharge = (bool) $meta['reverse_charge'];
+        $countryIso = (string) ($meta['iso2'] ?? 'CZ');
 
         foreach (array_values($items) as $i => $item) {
             $vatRateId = (int) ($item['vat_rate_id'] ?? 0);
             $rate = $vatRates[$vatRateId] ?? 0.0;
             // Auto-klasifikace pro DPH přiznání / KH — bez ní by faktura nedorazila
             // do výkazů (VatClassificationMapper SKIPNE řádky s code=NULL).
-            $code = $item['vat_classification_code'] ?? self::defaultSaleClassificationCode($rate, $reverseCharge);
+            $code = $item['vat_classification_code']
+                ?? self::defaultSaleClassificationCode($rate, $reverseCharge, $countryIso);
             $stmt->execute([
                 $invoiceId,
                 (string) ($item['description'] ?? ''),
@@ -478,20 +488,44 @@ final class InvoiceRepository
     }
 
     /**
-     * Default vat_classification_code podle sazby + RC pro VYSTAVENÉ faktury.
+     * Default vat_classification_code podle sazby + RC + země klienta pro VYSTAVENÉ faktury.
      *
-     * Mapování (sale direction, tuzemsko — nejčastější CZ scénář):
-     *   21% → '1' (Dodání zboží/služby tuzemsko — základní)
-     *   12% → '2' (Dodání zboží/služby tuzemsko — snížená)
-     *   0%  → '3' (Dodání tuzemsko osvobozeno)
+     * Mapování:
+     *   CZ klient:
+     *     21% → '1' (tuzemsko základní)
+     *     12% → '2' (tuzemsko snížená)
+     *     0%  → '3' (tuzemsko osvobozeno)
+     *   EU klient (DE, SK, AT, …):
+     *     0%  → '22' (poskytnutí služby do EU, B2B reverse charge — nejčastější CZ IT use case)
+     *     21%/12% → tuzemsko sazby (B2C nebo CZ klient s EU adresou)
+     *   Non-EU klient:
+     *     0%  → '26' (vývoz do 3. země)
+     *     jinak tuzemsko sazby
      *
-     * Pro dodávky do EU (kódy 20, 22) / vývoz (26) si user musí kód změnit
-     * ručně v UI — default je tuzemsko (nejčastější případ).
+     * Pro dodávky zboží do EU (kód '20') si user musí kód změnit ručně —
+     * default rate=0% pro EU mapujeme na služby ('22'), což je častější.
      */
-    public static function defaultSaleClassificationCode(float $rate, bool $reverseCharge): ?string
-    {
+    public static function defaultSaleClassificationCode(
+        float $rate,
+        bool $reverseCharge,
+        ?string $clientCountryIso2 = null,
+    ): ?string {
         $r = (int) round($rate);
-        if ($r >= 21) return '1';
+        $iso = strtoupper((string) ($clientCountryIso2 ?? 'CZ'));
+        // EU member states (ISO-2 kódy, bez CZ které je tuzemsko)
+        $euCountries = [
+            'AT','BE','BG','HR','CY','DK','EE','FI','FR','DE','GR','HU','IE','IT',
+            'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+        ];
+        $isEu = in_array($iso, $euCountries, true);
+        $isForeign = $iso !== 'CZ' && $iso !== '';
+
+        // Zahraniční klient + nulová sazba → EU služby nebo vývoz
+        if ($isForeign && $r === 0) {
+            return $isEu ? '22' : '26';
+        }
+        // Tuzemsko / B2C cizinec s českou DPH sazbou
+        if ($r >= 21)            return '1';
         if ($r >= 5 && $r <= 15) return '2';
         return '3';
     }

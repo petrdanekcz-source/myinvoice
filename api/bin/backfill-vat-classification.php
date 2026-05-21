@@ -19,73 +19,95 @@ declare(strict_types=1);
  * je tuzemsko (nejčastější případ pro CZ tenanta).
  *
  * Použití:
- *   php api/bin/backfill-vat-classification.php           # dry-run
- *   php api/bin/backfill-vat-classification.php --apply   # zápis
+ *   php api/bin/backfill-vat-classification.php                # dry-run, jen NULL řádky
+ *   php api/bin/backfill-vat-classification.php --apply        # zápis NULL řádků
+ *   php api/bin/backfill-vat-classification.php --force        # dry-run, VŠECHNY řádky (i s existujícím kódem)
+ *   php api/bin/backfill-vat-classification.php --force --apply# přepíše VŠECHNY řádky kde derived != current
  */
 
 require __DIR__ . '/../vendor/autoload.php';
 
 $dryRun = !in_array('--apply', $argv, true);
+$force  = in_array('--force', $argv, true);
 
 $app = \MyInvoice\Bootstrap::buildApp();
 $container = $app->getContainer();
 $pdo = $container->get(\MyInvoice\Infrastructure\Database\Connection::class)->pdo();
 
-// Najdi všechny řádky bez classification_code, kde nadřazená faktura není cancelled
+// JOIN přes vendor → země pro správný code (EU → '24', non-EU → '25', CZ → '40'/'41' atd.)
+// Bez --force: jen NULL řádky. S --force: všechny (porovná derived vs current, přepíše rozdíly).
+$whereCode = $force ? "" : "AND pii.vat_classification_code IS NULL";
 $stmt = $pdo->query(
-    "SELECT pii.id, pii.purchase_invoice_id, pii.vat_rate_snapshot, pi.supplier_id, pi.vendor_invoice_number, pi.status
+    "SELECT pii.id, pii.purchase_invoice_id, pii.vat_rate_snapshot, pii.vat_classification_code AS current_code,
+            pi.supplier_id, pi.vendor_invoice_number, pi.status, pi.reverse_charge,
+            co.iso2 AS vendor_country
        FROM purchase_invoice_items pii
        JOIN purchase_invoices pi ON pi.id = pii.purchase_invoice_id
-      WHERE pii.vat_classification_code IS NULL
-        AND pi.status != 'cancelled'
+       JOIN clients c            ON c.id  = pi.vendor_id
+       JOIN countries co         ON co.id = c.country_id
+      WHERE pi.status != 'cancelled'
+        {$whereCode}
       ORDER BY pi.supplier_id, pi.id, pii.id"
 );
 $items = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
 if (empty($items)) {
-    echo "Žádné řádky bez vat_classification_code — nic k doplnění.\n";
+    echo "Žádné řádky " . ($force ? "" : "bez vat_classification_code ") . "— nic k doplnění.\n";
     exit(0);
 }
 
-$mode = $dryRun ? '[DRY-RUN] ' : '';
-echo "{$mode}Nalezeno " . count($items) . " purchase_invoice_items bez vat_classification_code:\n\n";
+$mode = ($dryRun ? '[DRY-RUN] ' : '') . ($force ? '[FORCE] ' : '');
+echo "{$mode}Procházím " . count($items) . " purchase_invoice_items:\n\n";
 
-$counts = ['40' => 0, '41' => 0, 'skipped' => 0];
+$counts = [];
 $updateStmt = $pdo->prepare(
     "UPDATE purchase_invoice_items SET vat_classification_code = ? WHERE id = ?"
 );
 
+$skipped = 0;
 foreach ($items as $it) {
     $rate = (float) $it['vat_rate_snapshot'];
-    $code = null;
-    $r = (int) round($rate);
-    if ($r >= 21)                 $code = '40';
-    elseif ($r >= 5 && $r <= 15)  $code = '41';
+    $current = $it['current_code'];
+    $derived = \MyInvoice\Repository\PurchaseInvoiceRepository::defaultClassificationCode(
+        $rate,
+        (bool) $it['reverse_charge'],
+        (string) $it['vendor_country'],
+    );
 
+    // Pokud derived == current, nic neměníme (i s --force)
+    if ($current !== null && $current === $derived) {
+        $skipped++;
+        continue;
+    }
+    if ($derived === null) {
+        $skipped++;
+        continue;
+    }
+
+    $arrow = $current !== null ? "{$current} → {$derived}" : "→ {$derived}";
     $line = sprintf(
-        "  item#%-6d pi#%-6d tenant=%-2d  %-9s  rate=%5.2f%%  vendor#=%s  →  %s",
+        "  item#%-6d pi#%-6d tenant=%-2d  %-9s  rate=%5.2f%%  ccy=%-3s  vendor#=%s  %s",
         $it['id'],
         $it['purchase_invoice_id'],
         $it['supplier_id'],
         $it['status'],
         $rate,
+        $it['vendor_country'],
         $it['vendor_invoice_number'] ?: '(none)',
-        $code ?? '(skip, rate=0)'
+        $arrow
     );
 
-    if ($code === null) {
-        $counts['skipped']++;
-        echo $line . "\n";
-        continue;
-    }
-    $counts[$code]++;
+    $counts[$derived] = ($counts[$derived] ?? 0) + 1;
     if (!$dryRun) {
-        $updateStmt->execute([$code, $it['id']]);
+        $updateStmt->execute([$derived, $it['id']]);
     }
     echo $line . "\n";
 }
 
-echo "\nSouhrn: kód 40 → {$counts['40']}, kód 41 → {$counts['41']}, skipped (rate=0) → {$counts['skipped']}\n";
+echo "\nSouhrn změn:\n";
+ksort($counts);
+foreach ($counts as $k => $v) echo "  kód {$k} → {$v}\n";
+echo "  beze změny: {$skipped}\n";
 
 if ($dryRun) {
     echo "\nSpusť znovu s --apply pro skutečný zápis.\n";

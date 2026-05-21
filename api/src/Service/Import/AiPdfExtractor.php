@@ -193,9 +193,8 @@ final class AiPdfExtractor
                 'unit_price_without_vat' => (float) $line['unit_price_without_vat'],
                 'vat_rate_id'            => $this->matchVatRateId($vatRates, $rate) ?? $defaultVatRateId,
                 'order_index'            => $idx,
-                // Auto-klasifikace pro DPH přiznání / KH — bez ní by faktura nedorazila
-                // do výkazů (VatClassificationMapper SKIPNE řádky bez classification_code).
-                'vat_classification_code' => $this->defaultPurchaseClassification($rate),
+                // vat_classification_code nesetujeme — PurchaseInvoiceRepository::replaceItems()
+                // auto-derive based on rate + RC + vendor country (lookup z DB).
             ];
         }
 
@@ -374,26 +373,6 @@ final class AiPdfExtractor
         $diff = round($rounded - $total, 2);
         // Sanity check — pouze pokud rozdíl je < 1 Kč (typicky zaokrouhlení nahoru/dolů)
         return abs($diff) < 1.0 ? $diff : 0.0;
-    }
-
-    /**
-     * Default VAT klasifikační kód pro přijatou fakturu podle sazby DPH.
-     *
-     * Mapování (purchase direction, tuzemsko, s nárokem na odpočet):
-     *   21% → '40' (Přijaté plnění v tuzemsku — základní)
-     *   12% → '41' (Přijaté plnění v tuzemsku — snížená)
-     *   0%  → null (osvobozeno bez nároku na odpočet)
-     *
-     * Bez code by faktura NEDORAZILA do DPH přiznání / KH — VatClassificationMapper
-     * `continue`s na řádcích kde `code` je NULL. Pro EU acquire / RC / dovoz si
-     * user musí kód změnit ručně v UI (default je tuzemsko, nejčastější případ).
-     */
-    private function defaultPurchaseClassification(float $rate): ?string
-    {
-        $r = round($rate);
-        if ($r >= 21) return '40';
-        if ($r >= 5 && $r <= 15) return '41';
-        return null;
     }
 
     private function sanitizeVendorNumber(string $vn): string

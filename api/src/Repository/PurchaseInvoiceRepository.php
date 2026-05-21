@@ -461,20 +461,32 @@ final class PurchaseInvoiceRepository
 
         $vatRates = $this->vatRateMap();
 
-        // Reverse charge na parent faktuře — určuje klasifikační kód (RC → '5')
-        $rcStmt = $pdo->prepare('SELECT reverse_charge FROM purchase_invoices WHERE id = ?');
-        $rcStmt->execute([$purchaseInvoiceId]);
-        $reverseCharge = (bool) $rcStmt->fetchColumn();
+        // Reverse charge + země dodavatele — určuje klasifikační kód:
+        //   CZ vendor → '40'/'41'/'42' (tuzemsko podle sazby)
+        //   CZ vendor + RC → '5' (přenesená povinnost)
+        //   EU vendor s 0% → '24' (přijetí služby z EU) — typický pro Anthropic, GitHub apod.
+        //   non-EU vendor s 0% → '25' (dovoz ze 3. země)
+        $metaStmt = $pdo->prepare(
+            'SELECT pi.reverse_charge, co.iso2
+               FROM purchase_invoices pi
+               JOIN clients c     ON c.id  = pi.vendor_id
+               JOIN countries co  ON co.id = c.country_id
+              WHERE pi.id = ?'
+        );
+        $metaStmt->execute([$purchaseInvoiceId]);
+        $meta = $metaStmt->fetch(PDO::FETCH_ASSOC) ?: ['reverse_charge' => 0, 'iso2' => 'CZ'];
+        $reverseCharge = (bool) $meta['reverse_charge'];
+        $countryIso = (string) ($meta['iso2'] ?? 'CZ');
 
         foreach (array_values($items) as $i => $item) {
             $vatRateId = (int) ($item['vat_rate_id'] ?? 0);
             $rate = $vatRates[$vatRateId] ?? 0.0;
             // Auto-klasifikace pro DPH přiznání / KH — pokud caller (importer / manual create)
-            // neuvedl explicitní kód, default podle sazby + RC flagu. Bez tohohle by faktura
-            // NEDORAZILA do výkazů (VatClassificationMapper SKIPNE řádky s code=NULL).
+            // neuvedl explicitní kód, default podle sazby + RC + country. Bez tohohle by
+            // faktura NEDORAZILA do výkazů (VatClassificationMapper SKIPNE code=NULL).
             $code = $item['vat_classification_code'] ?? null;
             if ($code === null) {
-                $code = self::defaultClassificationCode($rate, $reverseCharge);
+                $code = self::defaultClassificationCode($rate, $reverseCharge, $countryIso);
             }
             $stmt->execute([
                 $purchaseInvoiceId,
@@ -491,19 +503,43 @@ final class PurchaseInvoiceRepository
     }
 
     /**
-     * Default vat_classification_code podle sazby + RC pro PŘIJATÉ faktury.
+     * Default vat_classification_code podle sazby + RC + země dodavatele pro PŘIJATÉ faktury.
      *
-     * Mapování (tuzemsko, s nárokem na odpočet — nejčastější CZ scénář):
-     *   RC + 21%      → '5'  (Přenesená povinnost tuzemsko)
-     *   21% standard  → '40' (Přijaté plnění tuzemsko — základní)
-     *   12% standard  → '41' (Přijaté plnění tuzemsko — snížená)
-     *   0% nebo jiné  → null (EU acquire / dovoz / osvobozeno — user si nastaví ručně)
+     * Mapování:
+     *   CZ vendor:
+     *     RC + 21%      → '5'  (přenesená povinnost tuzemsko)
+     *     21% standard  → '40' (přijaté plnění tuzemsko — základní)
+     *     12% standard  → '41' (přijaté plnění tuzemsko — snížená)
+     *     0%            → null (osvobozeno bez nároku — user si vybere)
+     *   EU vendor (DE, SK, AT, IE, …):
+     *     0% → '24' (přijetí služby z EU — typický pro Anthropic, GitHub, Microsoft Ireland)
+     *     21%/12% → tuzemsko sazby (vendor v EU vykazuje českou DPH — vzácné)
+     *   Non-EU vendor (US, UK, atd.):
+     *     0% → '25' (dovoz ze 3. země)
+     *     jinak tuzemsko sazby
      *
-     * Pro EU acquire / dovoz si user musí kód změnit ručně v UI (kód 23, 24, 25).
+     * Pro pořízení zboží z EU ('23' místo služby '24') si user změní ručně —
+     * default 0%+EU mapujeme na služby, což je častější CZ IT use case.
      */
-    public static function defaultClassificationCode(float $rate, bool $reverseCharge): ?string
-    {
+    public static function defaultClassificationCode(
+        float $rate,
+        bool $reverseCharge,
+        ?string $vendorCountryIso2 = null,
+    ): ?string {
         $r = (int) round($rate);
+        $iso = strtoupper((string) ($vendorCountryIso2 ?? 'CZ'));
+        $euCountries = [
+            'AT','BE','BG','HR','CY','DK','EE','FI','FR','DE','GR','HU','IE','IT',
+            'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+        ];
+        $isEu = in_array($iso, $euCountries, true);
+        $isForeign = $iso !== 'CZ' && $iso !== '';
+
+        // Zahraniční dodavatel + nulová sazba → EU služby (acquire) / dovoz
+        if ($isForeign && $r === 0) {
+            return $isEu ? '24' : '25';
+        }
+        // CZ tuzemsko (nebo zahraniční vendor s CZ DPH, vzácné)
         if ($reverseCharge && $r >= 21) return '5';
         if ($r >= 21)                   return '40';
         if ($r >= 5 && $r <= 15)        return '41';
