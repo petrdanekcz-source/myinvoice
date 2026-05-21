@@ -8,7 +8,7 @@ import { crmApi, type CrmOverview, type CrmMonthlyRow, type TopClient, type TopV
   type AgingBucket, type DsoResult, type PunctualityResult, type ConcentrationResult,
   type ExpenseCategoryRow, type ChurnRiskClient,
   type ActionItemsResult, type CashFlowResult, type LateRiskClient,
-  type ReminderEffectiveness, type PaymentTimeHistogram } from '@/api/crm'
+  type ReminderEffectiveness, type PaymentTimeHistogram, type CrmYearlyRow } from '@/api/crm'
 import { formatMoney } from '@/composables/useFormat'
 import { apiErrorMessage } from '@/api/errors'
 
@@ -18,6 +18,7 @@ const toast = useToast()
 
 const overview = ref<CrmOverview | null>(null)
 const monthly = ref<CrmMonthlyRow[]>([])
+const yearly = ref<CrmYearlyRow[]>([])
 const topClients = ref<TopClient[]>([])
 const topVendors = ref<TopVendor[]>([])
 const agingRecv = ref<AgingBucket[]>([])
@@ -44,9 +45,18 @@ async function dismissItem(itemType: string, mode: 'day' | 'week' | 'forever' | 
   try {
     await crmApi.dismissActionItem(itemType, mode)
     openMenuIdx.value = null
-    // Refresh action items
     actionItems.value = await crmApi.actionItems()
     toast.success(t('crm.action_items.dismissed'))
+  } catch (e) {
+    toast.error(apiErrorMessage(e))
+  }
+}
+
+async function restoreAllDismissed() {
+  try {
+    const r = await crmApi.restoreAllActionItems()
+    actionItems.value = await crmApi.actionItems()
+    toast.success(t('crm.action_items.restored_n', { n: r.restored }))
   } catch (e) {
     toast.error(apiErrorMessage(e))
   }
@@ -69,9 +79,10 @@ async function loadAll() {
   loading.value = true
   try {
     const cur = currencyFilter.value || undefined
-    const [ov, mo, tc, tv, ar, ap, d, p, conc, exp, ch, ai, cf, lr, re, ph] = await Promise.all([
+    const [ov, mo, yr, tc, tv, ar, ap, d, p, conc, exp, ch, ai, cf, lr, re, ph] = await Promise.all([
       crmApi.overview(),
       crmApi.monthly(periodMonths.value, cur),
+      crmApi.yearly(cur),
       crmApi.topClients(periodMonths.value, 10, cur),
       crmApi.topVendors(periodMonths.value, 10, cur),
       crmApi.agingReceivables(),
@@ -89,6 +100,7 @@ async function loadAll() {
     ])
     overview.value = ov
     monthly.value = mo
+    yearly.value = yr
     topClients.value = tc
     topVendors.value = tv
     agingRecv.value = ar
@@ -250,12 +262,16 @@ onMounted(loadAll)
 
     <div v-else class="space-y-4">
       <!-- ═══ Action items widget (daily TODO) ═══ -->
-      <div v-if="actionItems && actionItems.total > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
-        <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between bg-gradient-to-r from-primary-50 to-white">
+      <div v-if="actionItems && actionItems.total > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm">
+        <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between bg-gradient-to-r from-primary-50 to-white rounded-t-lg">
           <h3 class="text-sm font-semibold uppercase tracking-wide text-primary-700">
             ⚡ {{ t('crm.action_items.title') }}
             <span class="ml-2 px-1.5 py-0.5 bg-primary-600 text-white rounded text-xs">{{ actionItems.total }}</span>
           </h3>
+          <button v-if="actionItems.dismissed_count > 0" type="button" @click="restoreAllDismissed"
+            class="text-xs text-neutral-500 hover:text-primary-600 underline decoration-dotted">
+            {{ t('crm.action_items.restore_n', { n: actionItems.dismissed_count }) }}
+          </button>
         </header>
         <div class="divide-y divide-neutral-100">
           <div v-for="(item, idx) in actionItems.items" :key="idx"
@@ -279,7 +295,7 @@ onMounted(loadAll)
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm0 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>
               </button>
               <div v-if="openMenuIdx === idx"
-                class="absolute right-3 top-12 z-20 bg-white border border-neutral-200 rounded-md shadow-lg py-1 min-w-[200px]"
+                class="absolute right-3 top-12 z-20 bg-white border border-neutral-200 rounded-md shadow-lg py-1 w-[280px]"
                 @click.stop>
                 <div class="px-3 py-1.5 text-xs uppercase tracking-wide text-neutral-500 font-semibold border-b border-neutral-100">
                   {{ t('crm.action_items.dismiss_title') }}
@@ -308,6 +324,18 @@ onMounted(loadAll)
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- ═══ Standalone restore hint — pro případ že total=0 ale jsou skryté ═══ -->
+      <div v-else-if="actionItems && actionItems.dismissed_count > 0"
+        class="bg-neutral-50 border border-neutral-200 rounded-lg px-4 py-2 flex items-center justify-between text-sm">
+        <span class="text-neutral-500">
+          {{ t('crm.action_items.all_clear_n_hidden', { n: actionItems.dismissed_count }) }}
+        </span>
+        <button type="button" @click="restoreAllDismissed"
+          class="text-xs text-primary-600 hover:text-primary-700 underline decoration-dotted">
+          {{ t('crm.action_items.restore_n', { n: actionItems.dismissed_count }) }}
+        </button>
       </div>
 
       <!-- ═══ KPI cards ═══ -->
@@ -665,6 +693,63 @@ onMounted(loadAll)
         </div>
       </div>
 
+      <!-- ═══ Náklady po rocích + Náklady po měsících (obdoba Stats) ═══ -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Náklady po rocích -->
+        <div v-if="yearly.length > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+          <header class="px-5 py-3 border-b border-neutral-200">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+              📅 {{ t('crm.costs_by_year_table') }}
+            </h3>
+          </header>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-neutral-50 text-xs text-neutral-500 uppercase tracking-wide">
+                <tr>
+                  <th class="text-left px-4 py-2 font-medium">{{ t('common.year') }}</th>
+                  <th class="text-right px-4 py-2 font-medium">{{ t('common.costs') }}</th>
+                  <th class="text-right px-4 py-2 font-medium whitespace-nowrap">{{ t('crm.purchase_invoices_short') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-neutral-100">
+                <tr v-for="r in yearly.filter(y => y.costs > 0 || y.purchase_count > 0)" :key="`cy-${r.year}-${r.currency}`">
+                  <td class="px-4 py-2 font-medium">{{ r.year }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-danger-500">{{ formatMoney(r.costs, r.currency) }}</td>
+                  <td class="px-4 py-2 text-right text-xs text-neutral-500">{{ r.purchase_count }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Náklady po měsících (posledních N podle periodMonths) -->
+        <div v-if="monthly.length > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+          <header class="px-5 py-3 border-b border-neutral-200">
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+              📊 {{ t('crm.costs_by_month_table') }}
+            </h3>
+          </header>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-neutral-50 text-xs text-neutral-500 uppercase tracking-wide">
+                <tr>
+                  <th class="text-left px-4 py-2 font-medium">{{ t('common.month') }}</th>
+                  <th class="text-right px-4 py-2 font-medium">{{ t('common.costs') }}</th>
+                  <th class="text-right px-4 py-2 font-medium whitespace-nowrap">{{ t('crm.purchase_invoices_short') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-neutral-100">
+                <tr v-for="row in [...monthly].filter(m => m.costs > 0 || m.purchase_count > 0).reverse()" :key="`cm-${row.period}-${row.currency}`">
+                  <td class="px-4 py-2 font-mono text-neutral-700">{{ row.period }}</td>
+                  <td class="px-4 py-2 text-right font-mono text-danger-500">{{ formatMoney(row.costs, row.currency) }}</td>
+                  <td class="px-4 py-2 text-right text-xs text-neutral-500">{{ row.purchase_count }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══ Cash flow forecast (4 týdny) ═══ -->
       <div v-if="cashFlow && cashFlow.weeks.length > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
         <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between">
@@ -673,7 +758,8 @@ onMounted(loadAll)
           </h3>
           <div class="text-xs text-neutral-500">{{ t('crm.cash_flow.next_n_weeks', { n: cashFlow.weeks.length }) }}</div>
         </header>
-        <table class="w-full text-sm">
+        <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[560px]">
           <thead class="bg-neutral-50 text-xs text-neutral-500 uppercase tracking-wide">
             <tr>
               <th class="text-left px-5 py-2">{{ t('crm.cash_flow.week') }}</th>
@@ -710,6 +796,7 @@ onMounted(loadAll)
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
 
       <!-- ═══ Late payment risk + Payment time histogram side-by-side ═══ -->

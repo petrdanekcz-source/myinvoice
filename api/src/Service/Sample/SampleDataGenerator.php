@@ -9,10 +9,12 @@ use MyInvoice\Service\Stats\StatsRecomputer;
 use PDO;
 
 /**
- * Generuje testovací sample data — 5 klientů, 8 zakázek, 20 faktur, 4 dobropisy.
+ * Generuje testovací sample data — 5 klientů, 8 zakázek, 20 faktur, 4 dobropisy,
+ * 4 dodavatelé a 12 přijatých faktur.
  * Sdílená logika pro `bin/sample.php` (CLI) i `SetupSampleAction` (HTTP wizard).
  *
- * Vrací: ['clients' => 5, 'projects' => 8, 'invoices' => 20, 'credit_notes' => 4]
+ * Vrací: ['clients' => 5, 'projects' => 8, 'invoices' => 20, 'credit_notes' => 4,
+ *         'vendors' => 4, 'purchase_invoices' => 12]
  */
 final class SampleDataGenerator
 {
@@ -22,7 +24,7 @@ final class SampleDataGenerator
     ) {}
 
     /**
-     * @return array{clients:int, projects:int, invoices:int, credit_notes:int}
+     * @return array{clients:int, projects:int, invoices:int, credit_notes:int, vendors:int, purchase_invoices:int}
      */
     public function generate(int $supplierId, int $adminUserId): array
     {
@@ -221,17 +223,140 @@ final class SampleDataGenerator
             ]);
         }
 
+        // ───── Dodavatelé (is_vendor=1, is_customer=0) ─────
+        $vendors = [
+            ['Anthropic, PBC',          null,        null,         '548 Market St #79290',  '94104', 'San Francisco', 'US', 'billing@anthropic.com', $eurId, 'EUR'],
+            ['Microsoft Czech s.r.o.',  '47123737',  'CZ47123737', 'Vyskočilova 1561/4a',   '14000', 'Praha 4',       'CZ', 'fakturace@microsoft.cz', $czkId, 'CZK'],
+            ['GitHub, Inc.',            null,        null,         '88 Colin P Kelly Jr St', '94107', 'San Francisco', 'US', 'billing@github.com',    $eurId, 'EUR'],
+            ['Office Pro s.r.o.',       '28765432',  'CZ28765432', 'Korunní 810/104',        '10100', 'Praha 10',     'CZ', 'fakturace@officepro.cz', $czkId, 'CZK'],
+        ];
+        $vendorIds = [];
+        $vendorMeta = [];
+        foreach ($vendors as [$company, $ic, $dic, $street, $zip, $city, $iso2, $email, $currencyId, $currencyCode]) {
+            $stmtCountry = $pdo->prepare('SELECT id FROM countries WHERE iso2 = ?');
+            $stmtCountry->execute([$iso2]);
+            $countryId = (int) $stmtCountry->fetchColumn() ?: $czId;
+            $stmt = $pdo->prepare(
+                'INSERT INTO clients (supplier_id, company_name, ic, dic, street, city, zip, country_id, main_email,
+                                      language, currency_default_id, is_customer, is_vendor)
+                 VALUES (?,?,?,?,?,?,?,?,?, "cs", ?, 0, 1)'
+            );
+            $stmt->execute([$supplierId, $company, $ic, $dic, $street, $city, $zip, $countryId, $email, $currencyId]);
+            $vid = (int) $pdo->lastInsertId();
+            $vendorIds[] = $vid;
+            $vendorMeta[] = [
+                'id' => $vid, 'company' => $company, 'ic' => $ic, 'dic' => $dic,
+                'street' => $street, 'zip' => $zip, 'city' => $city, 'iso2' => $iso2,
+                'currency_id' => $currencyId, 'currency' => $currencyCode,
+            ];
+        }
+
+        // ───── Přijaté faktury (12 ks rozprostřených přes posledních 6 měsíců) ─────
+        $purchaseCount = 0;
+        for ($i = 0; $i < 12; $i++) {
+            $monthsBack = (int) floor($i / 2);
+            $issueDt = $today->modify("-{$monthsBack} months")->modify('-' . ($i * 2) . ' days');
+            if ($issueDt > $today) $issueDt = $today->modify('-1 day');
+            $issueDate = $issueDt->format('Y-m-d');
+            $taxDate   = $issueDate;
+            $dueDate   = $issueDt->modify('+14 days')->format('Y-m-d');
+            $receivedAt = $issueDt->modify('+2 days')->format('Y-m-d');
+
+            $v = $vendorMeta[$i % count($vendorMeta)];
+            $period = $issueDt->format('Ym');
+            $vs = $this->nextPurchaseVarsymbol($pdo, $supplierId, $period);
+
+            // Status: starší jsou paid, novější booked/received
+            $status = match (true) {
+                $monthsBack >= 3 => 'paid',
+                $monthsBack >= 1 => 'booked',
+                default          => 'received',
+            };
+            $bookedAt = in_array($status, ['booked', 'paid'], true) ? $issueDate . ' 14:00:00' : null;
+            $paidAt   = $status === 'paid' ? $issueDt->modify('+' . random_int(3, 12) . ' days')->format('Y-m-d') : null;
+
+            $vendorInvoiceNumber = sprintf('INV-%s-%04d', substr($period, 2), $i + 100);
+            $vendorSnapshot = json_encode([
+                'company_name' => $v['company'],
+                'ic' => $v['ic'], 'dic' => $v['dic'],
+                'street' => $v['street'], 'city' => $v['city'], 'zip' => $v['zip'],
+                'country_iso2' => $v['iso2'],
+            ], JSON_UNESCAPED_UNICODE);
+
+            $exchangeRate = $v['currency'] === 'CZK' ? null : 25.0;
+
+            $stmt = $pdo->prepare(
+                'INSERT INTO purchase_invoices
+                    (supplier_id, vendor_id, varsymbol, vendor_invoice_number, document_kind,
+                     issue_date, tax_date, due_date, received_at, currency_id, exchange_rate, exchange_rate_date,
+                     exchange_rate_source, reverse_charge, language, vendor_snapshot,
+                     total_without_vat, total_vat, total_with_vat, status, booked_at, paid_at, created_by)
+                 VALUES (?, ?, ?, ?, "invoice", ?, ?, ?, ?, ?, ?, ?, "cnb", 0, "cs", ?, 0, 0, 0, ?, ?, ?, ?)'
+            );
+            $stmt->execute([
+                $supplierId, $v['id'], $vs, $vendorInvoiceNumber,
+                $issueDate, $taxDate, $dueDate, $receivedAt,
+                $v['currency_id'], $exchangeRate, $exchangeRate !== null ? $issueDate : null,
+                $vendorSnapshot, $status, $bookedAt, $paidAt, $adminUserId,
+            ]);
+            $piId = (int) $pdo->lastInsertId();
+
+            // 1-3 položky
+            $itemCount = random_int(1, 3);
+            $totalBase = 0; $totalVat = 0;
+            for ($k = 0; $k < $itemCount; $k++) {
+                $qty  = random_int(1, 5);
+                $rate = $v['currency'] === 'CZK' ? random_int(500, 5000) : random_int(20, 200);
+                $base = $qty * $rate;
+                $vatAmt = round($base * 0.21, 2);
+                $totalBase += $base; $totalVat += $vatAmt;
+                $description = match ($k) {
+                    0 => 'API kredity / cloud služby',
+                    1 => 'Software licence',
+                    default => 'Konzultace / podpora',
+                };
+                $pdo->prepare(
+                    'INSERT INTO purchase_invoice_items
+                        (purchase_invoice_id, description, quantity, unit, unit_price_without_vat,
+                         vat_rate_id, vat_rate_snapshot, total_without_vat, total_vat, total_with_vat, order_index)
+                     VALUES (?,?,?,"ks",?,?,21.00,?,?,?,?)'
+                )->execute([
+                    $piId, $description, $qty, $rate, $stdVat, $base, $vatAmt, $base + $vatAmt, $k,
+                ]);
+            }
+            $totalWithVat = $totalBase + $totalVat;
+            $pdo->prepare(
+                'UPDATE purchase_invoices SET total_without_vat = ?, total_vat = ?, total_with_vat = ? WHERE id = ?'
+            )->execute([$totalBase, $totalVat, $totalWithVat, $piId]);
+            $purchaseCount++;
+        }
+
         // Sample data nejdou přes InvoiceActions, takže project/client revenue cache by zůstaly prázdné
         // → dashboard a top-clients koláč by hlásily nulu. Recompute všech vygenerovaných entit.
         foreach ($projectIds as $pid) $this->stats->recomputeProject((int) $pid);
         foreach ($clientIds  as $cid) $this->stats->recomputeClient((int) $cid);
+        foreach ($vendorIds  as $vid) $this->stats->recomputeClient((int) $vid);
 
         return [
-            'clients'      => count($clientIds),
-            'projects'     => count($projectIds),
-            'invoices'     => 20,
-            'credit_notes' => 4,
+            'clients'           => count($clientIds),
+            'projects'          => count($projectIds),
+            'invoices'          => 20,
+            'credit_notes'      => 4,
+            'vendors'           => count($vendorIds),
+            'purchase_invoices' => $purchaseCount,
         ];
+    }
+
+    private function nextPurchaseVarsymbol(PDO $pdo, int $supplierId, string $period): string
+    {
+        $pdo->prepare(
+            'INSERT INTO purchase_invoice_counters (supplier_id, period, last_number) VALUES (?,?,1)
+             ON DUPLICATE KEY UPDATE last_number = last_number + 1'
+        )->execute([$supplierId, $period]);
+        $stmt = $pdo->prepare('SELECT last_number FROM purchase_invoice_counters WHERE supplier_id=? AND period=?');
+        $stmt->execute([$supplierId, $period]);
+        $num = (int) $stmt->fetchColumn();
+        return 'PF-' . $period . '-' . str_pad((string) $num, 4, '0', STR_PAD_LEFT);
     }
 
     private function nextVarsymbol(PDO $pdo, int $supplierId, string $type, string $period): string

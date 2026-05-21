@@ -160,7 +160,7 @@ function openClient(c: Client) {
             <th class="text-left px-4 py-2.5 font-medium">{{ t('client.company') }}</th>
             <th class="text-left px-4 py-2.5 font-medium">{{ t('common.ic') }}</th>
             <th class="text-left px-4 py-2.5 font-medium">{{ t('client.email') }}</th>
-            <th class="text-center px-4 py-2.5 font-medium">{{ t('nav.projects') }}</th>
+            <th class="text-center px-4 py-2.5 font-medium">{{ roleFilter === 'vendors' ? t('client.invoice_count_label') : t('nav.projects') }}</th>
             <th class="text-right px-4 py-2.5 font-medium">{{ roleFilter === 'vendors' ? t('common.costs') : t('common.revenue') }}</th>
             <th class="text-left px-4 py-2.5 font-medium">{{ t('common.last_activity') }}</th>
             <th class="text-center px-4 py-2.5 font-medium">{{ t('common.currency') }}</th>
@@ -187,10 +187,18 @@ function openClient(c: Client) {
             <td class="px-4 py-3 font-mono text-xs text-neutral-600">{{ c.ic || '—' }}</td>
             <td class="px-4 py-3 text-neutral-600">{{ c.main_email }}</td>
             <td class="px-4 py-3 text-center">
-              <span v-if="c.active_projects_count" class="inline-block px-2 py-0.5 text-xs bg-primary-50 text-primary-700 rounded">
-                {{ c.active_projects_count }}
-              </span>
-              <span v-else class="text-neutral-300">—</span>
+              <template v-if="roleFilter === 'vendors'">
+                <span v-if="c.purchase_count" class="inline-block px-2 py-0.5 text-xs bg-warning-50 text-warning-700 rounded">
+                  {{ c.purchase_count }}
+                </span>
+                <span v-else class="text-neutral-300">—</span>
+              </template>
+              <template v-else>
+                <span v-if="c.active_projects_count" class="inline-block px-2 py-0.5 text-xs bg-primary-50 text-primary-700 rounded">
+                  {{ c.active_projects_count }}
+                </span>
+                <span v-else class="text-neutral-300">—</span>
+              </template>
             </td>
             <td class="px-4 py-3 text-right font-mono">
               <template v-if="roleFilter === 'vendors'">
@@ -252,7 +260,10 @@ function openClient(c: Client) {
               <span v-if="c.last_invoice_date">{{ formatDate(c.last_invoice_date) }}</span>
               <span v-else class="text-neutral-300">—</span>
             </span>
-            <span v-if="c.active_projects_count" class="px-2 py-0.5 bg-primary-50 text-primary-700 rounded">
+            <span v-if="roleFilter === 'vendors' && c.purchase_count" class="px-2 py-0.5 bg-warning-50 text-warning-700 rounded">
+              {{ t('client.invoice_count_label') }}: {{ c.purchase_count }}
+            </span>
+            <span v-else-if="c.active_projects_count" class="px-2 py-0.5 bg-primary-50 text-primary-700 rounded">
               {{ t('nav.projects') }}: {{ c.active_projects_count }}
             </span>
           </div>

@@ -35,7 +35,18 @@ interface NavItem {
 interface NavSection {
   /** Hlavička sekce; pokud chybí, položky jsou bez visual grouping */
   title?: string
+  /** Color accent pro vertikální pruh + text. Tailwind utility class group. */
+  accent?: 'primary' | 'warning' | 'success' | 'danger' | 'neutral'
   items: NavItem[]
+}
+
+/** Mapování accent → soft pill (background + text) per sekce. */
+const ACCENT_CLASSES: Record<NonNullable<NavSection['accent']>, string> = {
+  primary: 'bg-primary-50  text-primary-700',
+  warning: 'bg-warning-50  text-warning-600',
+  success: 'bg-success-50  text-success-600',
+  danger:  'bg-danger-50   text-danger-500',
+  neutral: 'bg-neutral-100 text-neutral-600',
 }
 
 /** Outline icon paths — Heroicons style, stroke 2, viewBox 24, currentColor */
@@ -80,6 +91,7 @@ const navSections = computed<NavSection[]>(() => {
       // Vše co se týká vystavování faktur klientům — klienti/zakázky/schvalování/exporty
       // patří v životním cyklu jednoho prodeje (klient → zakázka → faktura → schválení → export pro účetní).
       title: t('nav.section_sales'),
+      accent: 'primary',
       items: [
         { to: '/invoices',         label: t('nav.invoices'),   icon: ICONS.invoices },
         { to: '/recurring',        label: t('nav.recurring'),  icon: ICONS.recurring },
@@ -92,6 +104,7 @@ const navSections = computed<NavSection[]>(() => {
     },
     {
       title: t('nav.section_purchase'),
+      accent: 'warning',
       items: [
         { to: '/purchase-invoices',          label: t('nav.purchase_invoices'),  icon: ICONS.purchase },
         { to: '/clients?role=vendors',       label: t('nav.vendors'),            icon: ICONS.suppliers },
@@ -102,6 +115,7 @@ const navSections = computed<NavSection[]>(() => {
     },
     {
       title: t('nav.section_finance'),
+      accent: 'success',
       items: [
         { to: '/crm',   label: t('nav.crm'),   icon: ICONS.crm },
         { to: '/stats', label: t('nav.stats'), icon: ICONS.stats },
@@ -110,6 +124,7 @@ const navSections = computed<NavSection[]>(() => {
     },
     {
       title: t('nav.section_taxes'),
+      accent: 'danger',
       items: [
         { to: '/reports/dph',         label: t('nav.reports_dph'),         icon: ICONS.tax_dph },
         { to: '/reports/kh',          label: t('nav.reports_kh'),          icon: ICONS.tax_kh },
@@ -125,6 +140,7 @@ const navSections = computed<NavSection[]>(() => {
     // Sjednocený "Import" pokrývá vystavené i přijaté faktury (admin/import s tabs).
     sections.push({
       title: t('nav.system'),
+      accent: 'neutral',
       items: [
         { to: '/admin/settings',         label: t('nav.settings'),        icon: ICONS.settings },
         { to: '/admin/codebooks',        label: t('nav.codebooks'),       icon: ICONS.codebooks },
@@ -331,12 +347,13 @@ onMounted(async () => {
       >
         <nav class="flex-1 overflow-y-auto px-2.5 py-3">
           <template v-for="(section, si) in navSections" :key="si">
-            <!-- Section title -->
-            <div
-              v-if="section.title"
-              class="px-2 pb-1 text-[10px] font-semibold text-neutral-400 uppercase tracking-wider"
-              :class="si === 0 ? 'pt-2' : 'pt-5'"
-            >{{ section.title }}</div>
+            <!-- Section title — soft pill background v barvě sekce -->
+            <div v-if="section.title" :class="si === 0 ? 'pt-1 pb-1.5' : 'pt-4 pb-1.5'">
+              <div
+                class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider"
+                :class="section.accent ? ACCENT_CLASSES[section.accent] : 'bg-neutral-100 text-neutral-600'"
+              >{{ section.title }}</div>
+            </div>
 
             <!-- Items: external (např. Nápověda → /manual v novém tabu) vs internal route -->
             <template v-for="item in section.items" :key="item.to">

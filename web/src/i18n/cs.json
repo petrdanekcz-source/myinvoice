@@ -233,6 +233,7 @@
     "force_delete": "Smazat (force)",
     "force_edit_hint": "Admin only — úprava received/booked faktury. Po uložení se přepočítají sumy.",
     "bulk": {
+      "mark_received": "Označit jako přijaté ({n})",
       "mark_booked": "Označit zaúčtováno ({n})",
       "mark_paid": "Označit zaplaceno ({n})",
       "cancel": "Stornovat ({n})",
@@ -950,6 +951,7 @@
     "revenue_by_project_table": "Obrat podle zakázek (čísla)",
     "no_project": "(bez zakázky)",
     "invoices_short": "Faktur",
+    "invoice_count_label": "Počet faktur",
     "title_vendors": "Dodavatelé",
     "issued_invoices": "Vystavené faktury",
     "received_invoices": "Přijaté faktury",
@@ -1479,6 +1481,8 @@
     "setup_link": "§ 2.4.1 Cron skripty",
     "report_label": "Report",
     "message_label": "Zpráva",
+    "non_imported_label": "Neimportované soubory ({n}) — kliknutím rozbal",
+    "list_truncated": "(seznam zkrácen — kompletní v logu cronu)",
     "ago_seconds": "před {n} s",
     "ago_minutes": "před {n} min",
     "ago_hours": "před {n} h",
@@ -1646,7 +1650,10 @@
       "dismiss_historical_hint": "Zobrazit jen nové výskyty (skrýt současné)",
       "dismiss_forever": "Navždy",
       "dismiss_forever_hint": "Nikdy znovu nezobrazovat",
-      "dismissed": "Upozornění bylo skryto"
+      "dismissed": "Upozornění bylo skryto",
+      "restore_n": "Obnovit skrytá ({n})",
+      "restored_n": "Obnoveno {n} upozornění",
+      "all_clear_n_hidden": "Žádné aktivní akce — {n} skrytých"
     },
     "cash_flow": {
       "title": "Cash flow prognóza",
@@ -1688,6 +1695,9 @@
     "monthly_trend": "Měsíční trend",
     "top_clients": "TOP klienti",
     "top_vendors": "TOP dodavatelé",
+    "costs_by_year_table": "Náklady po rocích",
+    "costs_by_month_table": "Náklady po měsících",
+    "purchase_invoices_short": "Přijatých",
     "no_data": "Žádná data — naimportuj faktury.",
     "no_data_hint": "Po vystavení nebo přijetí prvních faktur klikni na 'Přepočítat'.",
     "no_data_vendors": "Žádné přijaté faktury — naimportuj v sekci Nákup.",

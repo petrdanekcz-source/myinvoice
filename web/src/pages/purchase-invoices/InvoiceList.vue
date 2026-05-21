@@ -169,6 +169,7 @@ function statusOf(id: number): PurchaseInvoiceStatus | null {
 }
 
 const draftsSelected     = computed(() => selectedIds.value.filter(id => statusOf(id) === 'draft'))
+const markReceivedSelected = computed(() => selectedIds.value.filter(id => statusOf(id) === 'draft'))
 const markPayableSelected = computed(() => selectedIds.value.filter(id => {
   const s = statusOf(id); return s === 'received' || s === 'booked'
 }))
@@ -218,10 +219,17 @@ async function bulkDelete() {
 
       <div class="flex items-center gap-2 flex-wrap">
         <!-- Bulk actions — viditelné jen pokud něco vybráno -->
+        <button v-if="markReceivedSelected.length > 0"
+          @click="bulkTransition('received', markReceivedSelected)"
+          :disabled="bulkBusy"
+          class="cursor-pointer inline-flex items-center gap-1.5 h-9 px-3 border border-primary-500 text-primary-700 hover:bg-primary-50 disabled:opacity-50 text-sm font-medium rounded-md">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12"/></svg>
+          {{ bulkBusy ? '…' : t('purchase_invoice.bulk.mark_received', { n: markReceivedSelected.length }) }}
+        </button>
         <button v-if="markBookableSelected.length > 0"
           @click="bulkTransition('booked', markBookableSelected)"
           :disabled="bulkBusy"
-          class="cursor-pointer inline-flex items-center gap-1.5 h-9 px-3 border border-primary-500 text-primary-700 hover:bg-primary-50 disabled:opacity-50 text-sm font-medium rounded-md">
+          class="cursor-pointer inline-flex items-center gap-1.5 h-9 px-3 border border-warning-500 text-warning-600 hover:bg-warning-50 disabled:opacity-50 text-sm font-medium rounded-md">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
           {{ bulkBusy ? '…' : t('purchase_invoice.bulk.mark_booked', { n: markBookableSelected.length }) }}
         </button>

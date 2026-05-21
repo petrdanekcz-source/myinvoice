@@ -2,8 +2,12 @@
 
 CRM (Customer Relationship Management) v MyInvoice.cz je BI/analytický modul nad tržbami, náklady a klienty. Najdeš ho v menu **Finance → CRM**.
 
+![CRM dashboard — KPI, monthly trend, aging, DSO, concentration risk](img/23_crm.webp)
+
 > [!IMPORTANT]
 > CRM nahrazuje předchozí stránku **Grafy** (přejmenovaná na **Tržby** v menu). Tržby zůstanou pro jednoduchý revenue overview; CRM rozšiřuje o náklady, zisk, aging, koncentraci, churn a další.
+>
+> ![Tržby — jednoduchý revenue overview (12měsíční obrat, forecast, top klienti)](img/23_trzby.webp)
 
 ## Co CRM zobrazuje
 

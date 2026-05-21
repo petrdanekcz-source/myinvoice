@@ -25,6 +25,16 @@ export interface CrmMonthlyRow extends CrmKpi {
   period: string
 }
 
+export interface CrmYearlyRow {
+  year: number
+  currency: string
+  revenue: number
+  costs: number
+  profit: number
+  invoice_count: number
+  purchase_count: number
+}
+
 export interface TopClient {
   client_id: number
   company_name: string
@@ -97,6 +107,8 @@ export const crmApi = {
     api.get<CrmOverview>('/crm/overview').then(r => r.data),
   monthly: (months = 12, currency?: string) =>
     api.get<CrmMonthlyRow[]>('/crm/monthly', { params: { months, currency } }).then(r => r.data),
+  yearly: (currency?: string) =>
+    api.get<CrmYearlyRow[]>('/crm/yearly', { params: { currency } }).then(r => r.data),
   topClients: (months = 12, limit = 10, currency?: string) =>
     api.get<TopClient[]>('/crm/top-clients', { params: { months, limit, currency } }).then(r => r.data),
   topVendors: (months = 12, limit = 10, currency?: string) =>
@@ -125,6 +137,8 @@ export const crmApi = {
     api.post<{ ok: boolean }>('/crm/action-items/dismiss', { item_type: itemType, mode }).then(r => r.data),
   restoreActionItem: (itemType: string) =>
     api.post<{ ok: boolean }>('/crm/action-items/restore', { item_type: itemType }).then(r => r.data),
+  restoreAllActionItems: () =>
+    api.post<{ ok: boolean; restored: number }>('/crm/action-items/restore-all', {}).then(r => r.data),
   cashFlowForecast: (weeks = 4, currency = 'CZK') =>
     api.get<CashFlowResult>('/crm/cash-flow-forecast', { params: { weeks, currency } }).then(r => r.data),
   lateRisk: (limit = 10) =>
@@ -148,6 +162,7 @@ export interface ActionItem {
 export interface ActionItemsResult {
   items: ActionItem[]
   total: number
+  dismissed_count: number
 }
 
 export interface CashFlowWeek {

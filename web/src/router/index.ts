@@ -75,6 +75,12 @@ const routes: RouteRecordRaw[] = [
 export const router = createRouter({
   history: createWebHistory(),
   routes,
+  // Scroll-to-top při navigaci sidebar linky; respektuj #hash a back/forward
+  scrollBehavior(_to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (_to.hash) return { el: _to.hash, behavior: 'smooth' }
+    return { top: 0, left: 0 }
+  },
 })
 
 router.beforeEach(async (to) => {

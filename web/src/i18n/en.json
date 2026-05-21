@@ -233,6 +233,7 @@
     "force_delete": "Delete (force)",
     "force_edit_hint": "Admin only — edit received/booked invoice. Totals will be recomputed.",
     "bulk": {
+      "mark_received": "Mark as received ({n})",
       "mark_booked": "Mark booked ({n})",
       "mark_paid": "Mark paid ({n})",
       "cancel": "Cancel ({n})",
@@ -950,6 +951,7 @@
     "revenue_by_project_table": "Revenue by project (numbers)",
     "no_project": "(no project)",
     "invoices_short": "Invoices",
+    "invoice_count_label": "Invoice count",
     "title_vendors": "Vendors",
     "issued_invoices": "Issued invoices",
     "received_invoices": "Received invoices",
@@ -1479,6 +1481,8 @@
     "setup_link": "§ 2.4.1 Cron scripts",
     "report_label": "Report",
     "message_label": "Message",
+    "non_imported_label": "Non-imported files ({n}) — click to expand",
+    "list_truncated": "(list truncated — see full cron log)",
     "ago_seconds": "{n} s ago",
     "ago_minutes": "{n} min ago",
     "ago_hours": "{n} h ago",
@@ -1646,7 +1650,10 @@
       "dismiss_historical_hint": "Show only new occurrences (hide current)",
       "dismiss_forever": "Forever",
       "dismiss_forever_hint": "Never show again",
-      "dismissed": "Notification dismissed"
+      "dismissed": "Notification dismissed",
+      "restore_n": "Restore hidden ({n})",
+      "restored_n": "Restored {n} notification(s)",
+      "all_clear_n_hidden": "No active actions — {n} hidden"
     },
     "cash_flow": {
       "title": "Cash flow forecast",
@@ -1688,6 +1695,9 @@
     "monthly_trend": "Monthly trend",
     "top_clients": "TOP clients",
     "top_vendors": "TOP vendors",
+    "costs_by_year_table": "Costs by year",
+    "costs_by_month_table": "Costs by month",
+    "purchase_invoices_short": "Received",
     "no_data": "No data — import invoices first.",
     "no_data_hint": "After your first invoices/expenses, click Recompute.",
     "no_data_vendors": "No received invoices — import in Purchases section.",

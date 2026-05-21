@@ -31,6 +31,27 @@ final class CrmAggregationService
     }
 
     /**
+     * Lazy recompute — pokud je crm_monthly_summary starší než $maxAgeSec sekund
+     * (nebo prázdná), spustí sp_recompute_crm_monthly_summary.
+     * Default 300s = 5 min staleness window.
+     */
+    public function recomputeIfStale(int $supplierId, int $maxAgeSec = 300): bool
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT MAX(computed_at) FROM crm_monthly_summary WHERE supplier_id = ?"
+        );
+        $stmt->execute([$supplierId]);
+        $lastComputed = $stmt->fetchColumn();
+        $needsRecompute = $lastComputed === null || $lastComputed === false
+            || (time() - (int) strtotime((string) $lastComputed)) > $maxAgeSec;
+        if ($needsRecompute) {
+            $this->recompute($supplierId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Overview KPI: aktuální měsíc + minulý měsíc + YTD (per currency).
      *
      * @return array{
@@ -42,6 +63,10 @@ final class CrmAggregationService
      */
     public function overview(int $supplierId): array
     {
+        // Auto-recompute pokud je summary starší než 5 minut — odpadá ruční klik "Přepočítat"
+        // po každém importu/úpravě faktury. sp je rychlá (~ms), tenant-scoped.
+        $this->recomputeIfStale($supplierId);
+
         $now = new \DateTimeImmutable();
         $currentMonth = $now->format('Y-m');
         $lastMonth = $now->modify('-1 month')->format('Y-m');
@@ -143,6 +168,49 @@ final class CrmAggregationService
                 'invoice_count' => (int) $r['invoice_count'],
                 'currency'      => (string) $r['currency'],
                 'percent_share' => $total > 0 ? round(($rev / $total) * 100, 2) : 0.0,
+            ];
+        }, $rows);
+    }
+
+    /**
+     * Yearly aggregation per currency (revenue + costs + profit + counts).
+     * Vrací všechny roky, kde tenant měl aspoň jednu řádku v crm_monthly_summary.
+     *
+     * @return list<array{year:int, currency:string, revenue:float, costs:float, profit:float, invoice_count:int, purchase_count:int}>
+     */
+    public function yearlyHistory(int $supplierId, ?string $currency = null): array
+    {
+        $params = [$supplierId];
+        $where = '';
+        if ($currency !== null) {
+            $where = ' AND currency = ?';
+            $params[] = $currency;
+        }
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT SUBSTRING(period_ym, 1, 4) AS year, currency,
+                    SUM(revenue)        AS revenue,
+                    SUM(costs)          AS costs,
+                    SUM(invoice_count)  AS invoice_count,
+                    SUM(purchase_count) AS purchase_count
+               FROM crm_monthly_summary
+              WHERE supplier_id = ?{$where}
+           GROUP BY year, currency
+           ORDER BY year DESC, currency ASC"
+        );
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        return array_map(static function ($r) {
+            $rev = (float) $r['revenue'];
+            $costs = (float) $r['costs'];
+            return [
+                'year'           => (int) $r['year'],
+                'currency'       => (string) $r['currency'],
+                'revenue'        => $rev,
+                'costs'          => $costs,
+                'profit'         => $rev - $costs,
+                'invoice_count'  => (int) $r['invoice_count'],
+                'purchase_count' => (int) $r['purchase_count'],
             ];
         }, $rows);
     }
@@ -660,7 +728,11 @@ final class CrmAggregationService
             ];
         }
 
-        return ['items' => $items, 'total' => count($items)];
+        return [
+            'items' => $items,
+            'total' => count($items),
+            'dismissed_count' => count($dismissals),
+        ];
     }
 
     /**
@@ -816,6 +888,36 @@ final class CrmAggregationService
               WHERE supplier_id = ? AND user_id = ? AND item_type = ?"
         );
         $stmt->execute([$supplierId, $userId, $itemType]);
+    }
+
+    /**
+     * Smaže VŠECHNY dismissals pro user — full restore.
+     */
+    public function restoreAllActionItems(int $supplierId, int $userId): int
+    {
+        $stmt = $this->db->pdo()->prepare(
+            "DELETE FROM crm_action_item_dismissals WHERE supplier_id = ? AND user_id = ?"
+        );
+        $stmt->execute([$supplierId, $userId]);
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Vrátí počet aktivních dismissals pro user (pro UI: zobrazit "obnovit X skrytých").
+     */
+    public function dismissedCount(int $supplierId, int $userId): int
+    {
+        // Auto-cleanup expirovaných day/week
+        $this->db->pdo()->prepare(
+            "DELETE FROM crm_action_item_dismissals
+              WHERE supplier_id = ? AND user_id = ?
+                AND mode IN ('day','week') AND dismissed_until IS NOT NULL AND dismissed_until < NOW()"
+        )->execute([$supplierId, $userId]);
+        $stmt = $this->db->pdo()->prepare(
+            "SELECT COUNT(*) FROM crm_action_item_dismissals WHERE supplier_id = ? AND user_id = ?"
+        );
+        $stmt->execute([$supplierId, $userId]);
+        return (int) $stmt->fetchColumn();
     }
 
     /**

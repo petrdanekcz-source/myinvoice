@@ -82,6 +82,30 @@ function fmtDuration(ms: number | null): string {
   return `${(ms / 1000).toFixed(1)} s`
 }
 
+interface NonImportedItem { supplier_id?: number | null; file: string; status: string; reason?: string }
+
+function getNonImported(report: unknown): NonImportedItem[] {
+  if (!report || typeof report !== 'object') return []
+  const arr = (report as Record<string, unknown>).non_imported
+  return Array.isArray(arr) ? (arr as NonImportedItem[]) : []
+}
+function getNonImportedCount(report: unknown): number {
+  if (!report || typeof report !== 'object') return 0
+  const r = report as Record<string, unknown>
+  return (typeof r.non_imported_count === 'number' ? r.non_imported_count : 0) || getNonImported(report).length
+}
+function isNonImportedTruncated(report: unknown): boolean {
+  return !!(report && typeof report === 'object' && (report as Record<string, unknown>).non_imported_truncated === true)
+}
+
+function reportSummary(report: unknown): string {
+  // Stringify report bez non_imported (která je renderována zvlášť) — pro stručný 1-line přehled
+  if (!report || typeof report !== 'object') return String(report ?? '')
+  const r = { ...(report as Record<string, unknown>) }
+  delete r.non_imported
+  return JSON.stringify(r)
+}
+
 function healthBadgeClass(h: CronJobHealth): string {
   switch (h) {
     case 'ok': return 'bg-success-50 text-success-600'
@@ -217,8 +241,27 @@ const hasProblems = computed(() => jobs.value.some(j => j.health !== 'ok'))
                   </div>
                   <div v-if="j.last_report" class="mt-2 text-xs">
                     <span class="text-neutral-500">{{ t('cron_jobs.report_label') }}: </span>
-                    <code class="font-mono text-neutral-700 break-all">{{ JSON.stringify(j.last_report) }}</code>
+                    <code class="font-mono text-neutral-700 break-all">{{ reportSummary(j.last_report) }}</code>
                   </div>
+                  <!-- Failed/skipped items list (e.g. cron-scan-purchase-inbox) -->
+                  <details v-if="getNonImported(j.last_report).length > 0" class="mt-2 text-xs">
+                    <summary class="cursor-pointer text-danger-600 hover:text-danger-700 select-none">
+                      {{ t('cron_jobs.non_imported_label', { n: getNonImportedCount(j.last_report) }) }}
+                    </summary>
+                    <ul class="mt-1.5 space-y-1 max-h-48 overflow-y-auto bg-neutral-50 border border-neutral-200 rounded p-2 font-mono">
+                      <li v-for="(item, idx) in getNonImported(j.last_report)" :key="idx" class="text-[11px]">
+                        <span class="inline-block px-1.5 rounded text-[10px] uppercase font-semibold mr-1.5"
+                          :class="item.status === 'failed' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'">
+                          {{ item.status }}
+                        </span>
+                        <span class="text-neutral-700">{{ item.file }}</span>
+                        <span v-if="item.reason" class="text-neutral-500"> — {{ item.reason }}</span>
+                      </li>
+                    </ul>
+                    <div v-if="isNonImportedTruncated(j.last_report)" class="mt-1 text-neutral-400">
+                      … {{ t('cron_jobs.list_truncated') }}
+                    </div>
+                  </details>
                 </td>
               </tr>
             </template>

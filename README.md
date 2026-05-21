@@ -7,9 +7,10 @@
 [![Docker](https://img.shields.io/badge/Docker-multi--arch-2496ED?logo=docker&logoColor=white)](https://github.com/radekhulan/myinvoice/pkgs/container/myinvoice)
 [![GHCR](https://img.shields.io/github/v/tag/radekhulan/myinvoice?label=GHCR&color=2496ED&logo=docker&logoColor=white)](https://github.com/radekhulan/myinvoice/pkgs/container/myinvoice)
 
-> **Český fakturační systém pro freelancery, OSVČ a malé firmy.**
-> Rychlé vystavování opakovaných faktur, QR platby, výkaz víceprací,
-> import bankovních výpisů, exporty pro účetní software — vše na vlastním serveru.
+> **Český fakturační a účetní systém pro freelancery, OSVČ a malé firmy.**
+> Vystavené i přijaté faktury, AI extrakce PDF, CRM dashboard, výkazy DPH /
+> KH / SH a daň z příjmů (EPO XML), QR platby, výkaz víceprací,
+> import bankovních výpisů, REST API, exporty pro účetní software — vše na vlastním serveru.
 
 Vyvíjí **[MyWebdesign.cz s.r.o.](https://mywebdesign.cz/)**
 
@@ -42,7 +43,7 @@ alternativa s důrazem na:
 
 ## Co umí
 
-### 📄 Fakturace
+### 📄 Vystavené faktury
 - 4 typy dokladů: **faktura**, **zálohová (proforma)**, **opravný daňový doklad** (dobropis), **interní storno**
 - Vystavení daňového dokladu z proformy s automatickým **odečtem zaplacené zálohy**
 - **Klonování faktur** s auto-inkrementem měsíce v popiscích (`3/2026 → 4/2026`)
@@ -57,6 +58,39 @@ alternativa s důrazem na:
 
 ![QR platba na PDF faktuře](manual/img/10_qr_platba.webp)
 
+### 📥 Přijaté faktury (nákupy) — od v4.0.0
+- **Dodavatelé** jako role v tabulce klientů (`is_vendor=1`) — sdílená evidence, jedna firma může být K+D
+- Status lifecycle: **draft → received → booked → paid** (+ cancelled), barevné UI badge
+- **Multi-currency** (faktura v USD, platba v CZK) s kurzem ČNB + tracking *exchange_diff_base*
+- Hromadné akce na konceptech: *Označit jako přijaté*, *Zaúčtovat*, *Označit zaplacené*, *Stornovat*, *Smazat*
+- PDF archiv s SHA-256 dedupe + force-delete pro admina
+- Filtr `?overdue=1` z dashboardu na nezaplacené po splatnosti
+- **Export Pohoda XML / ISDOC ZIP / PDF ZIP** — analogicky vystaveným fakturám
+
+### 🤖 Inteligentní import — od v4.0.0
+- **AI extrakce PDF** přes Anthropic Claude (BYOK) — z naskenovaného PDF vytáhne dodavatele,
+  IČ/DIČ, číslo dokladu, datumy, položky, sumy, IBAN, e-mail, telefon, web,
+  detekce *"NEPLAŤTE, JIŽ UHRAZENO"* (auto-paid), rounding handling
+- **ISDOC import** (PdfIsdocExtractor + parser) — strukturovaná XML data uvnitř PDF
+- **Pohoda XML import** vystavených i přijatých faktur
+- **iDoklad / Fakturoid synchronizace** — OAuth pull klientů + faktur + PDF příloh
+- **Inbox scan** — sleduje konfigurovaný adresář, ISDOC priorita, AI fallback,
+  rate limited (30 calls / 5 min / user), cron `cron-scan-purchase-inbox`
+- **ClientResolver** — 3-úrovňový lookup (IČO → DIČ → exact company_name) brání duplikování dodavatelů
+
+### 📊 CRM dashboard — od v4.0.0
+- **KPI** — tržby / náklady / zisk per měsíc + YTD + trend % vs minulý měsíc
+- **Akce pro tebe** — daily TODO (overdue faktury, recurring k vystavení, DPH deadline,
+  neaktivní klienti) s dismiss per den / týden / navždy / **pro historická data**
+  (snapshotuje aktuální ID, zobrazí jen NOVÉ výskyty — užitečné při migraci 2 roky zpět)
+- **Aging** pohledávek i závazků (V termínu / 1-30 / 31-60 / 61-90 / 90+ dní)
+- **DSO** (Days Sales Outstanding), platební morálka, riziko koncentrace (Pareto)
+- **Cash flow forecast** 4 týdny dopředu, late-risk score per klient
+- **Náklady po rocích / měsících**, expense breakdown podle kategorií, churn risk
+- **Top klienti / Top dodavatelé** Pareto + percent_share
+
+![CRM dashboard — KPI, monthly trend, aging, DSO, concentration risk](manual/img/23_crm.webp)
+
 ### 💳 Platby
 - **QR platby** přímo v PDF: SPAYD pro CZK, SEPA EPC pro EUR
 - **Import GPC** výpisů (ABO formát, KB / FIO / ČSOB / RB / ČS) s SHA256 dedupe
@@ -66,10 +100,11 @@ alternativa s důrazem na:
 
 ![Schvalovací stránka pro zákazníka](manual/img/09_schvalit_vykaz_prace.webp)
 
-### 👥 Klienti & zakázky
-- Klienti s **ARES** (IČO → adresa, název) a **VIES** (DIČ) lookupem
+### 👥 Klienti, zakázky & dodavatelé
+- Klienti s **ARES** (IČO → adresa, název) a **VIES** (DIČ) lookupem (+ fallback)
+- **Dual-role firmy** — jeden řádek může být zároveň klient (K) i dodavatel (D)
 - Zakázky 1:N pod klientem, fakturační emaily per zakázka (účetní, PM…)
-- Filter zakázek podle klienta
+- Filter zakázek podle klienta, vendors `?role=vendors` se sloupcem *Počet faktur*
 - Reverse charge přepínatelný per klient
 - Smazání chráněné 409, pokud má klient/zakázka navázané faktury
 
@@ -78,12 +113,28 @@ alternativa s důrazem na:
 - Přepínač v horní liště, izolovaná data (klienti, zakázky, faktury, číselníky)
 - Každý dodavatel má vlastní sadu měn + bankovních účtů, vlastní řadu varsymbolů
 - Per-dodavatel: ARES údaje, logo, podpis, SMTP `From:` jméno + `Reply-To:` adresa, Pohoda kódy
+- **AI BYOK** — Anthropic API key per dodavatel (volitelný), šifrovaný v DB
 
 ### 📦 Exporty pro účetní
-- **Hromadný export PDF** (ZIP po měsících)
+- **Hromadný export PDF** (ZIP po měsících) — vystavených i přijatých
 - **ISDOC 6.0.2** — český národní standard pro B2B výměnu faktur
 - **Pohoda XML** (Stormware data package) — přímý import do Pohody bez ručního opisu
 - Per-dodavatel konfigurace Pohoda kódů (středisko, činnost, předkontace, číselná řada)
+
+### 🧾 Výkazy DPH a daň z příjmů — od v4.0.0
+- **DPHDP3** — přiznání k DPH (měsíční / kvartální, s ohledem na is_vat_payer + financial_office_code)
+- **DPHKH1** — Kontrolní hlášení (A.1-A.5, B.1-B.3, řádky 40-43, RC, dovoz)
+- **DPHSHV** — Souhrnné hlášení (EU intracom dodávky)
+- **DPFDP5** (OSVČ) a **DPPDP9** (právnické osoby) — daň z příjmů MVP foundation
+- XML pro **EPO portál MFČR** + XSD validace přes `DOMDocument::schemaValidate`
+- **Archiv podání** — každé generování XML s timestamp + summary + status
+
+### 🔌 REST API v1 (public) — od v3.4.0
+- **Personal Access Tokens** (PAT) přes Bearer Authorization
+- 101 endpointů v `/api/v1/*` (vystavené + přijaté faktury, klienti, zakázky, CRM, výkazy, codebooks)
+- **OpenAPI 3.1** spec v `api/openapi.yaml` + Swagger UI + Redoc
+- Rate limit 600 req/min/token, X-RateLimit-* hlavičky
+- Per-token scope (read-only / write), audit log
 
 ### 📧 Komunikace
 - Odesílání faktur **e-mailem** (Symfony Mailer + DKIM podpora)
@@ -96,15 +147,25 @@ alternativa s důrazem na:
 - **Brute-force ochrana** (Redis nebo MariaDB MEMORY fallback) — 5 selhání → CAPTCHA, 30/h → 24h lockout
 - **Cloudflare Turnstile** CAPTCHA
 - **IP allowlist** (IPv4 + IPv6 + CIDR)
-- **CSRF** + Origin check, **TOTP 2FA**, peppered bcrypt hesla
+- **CSRF** + Origin check, **TOTP 2FA** (volitelně vynucené pro všechny: `MYINVOICE_AUTH_REQUIRE_TOTP=true`)
+- Peppered bcrypt hesla, **AES-256-GCM** šifrování citlivých polí (TOTP secret, AI keys)
 - **RBAC** (admin / accountant / readonly)
 - **Activity log** všech mutací (včetně IP)
+- **Path-traversal guards** (Windows case-insensitive), XML sanitization, ZIP streaming
+- **AI rate limit** 30 calls / 5 min / user — ochrana před BYOK billing rizikem
 
-### 📊 Dashboard
-- KPI tiles, **dynamický počet sloupců** dle aktivních měn (4–6)
+### 📊 Homepage
+- KPI tiles ve 3 sekcích s barevným odlišením: **Vystavené** (purple), **Přijaté** (orange), **Pohledávky** (green)
 - Top klienti — koláč letošního i loňského roku
 - Obrat po měsících (line chart letos vs. minulý rok)
 - Po splatnosti + nezaplacené faktury (s tlačítkem upomínka)
+- Cash-flow forecast — co přiteče v příštích týdnech
+
+### ⚙️ Admin: Cron jobs monitoring — od v4.0.0
+- `/admin/cron-jobs` přehled všech cron skriptů s health badge (ok / overdue / failing)
+- Last run / last OK / duration / status
+- **Failed items list** — pro `cron-scan-purchase-inbox` se rozbalí seznam neimportovaných souborů s důvodem (path traversal, AI nedostupné, prázdný PDF, …)
+- Manual *Spustit teď* tlačítko
 
 ---
 
@@ -520,14 +581,15 @@ Bundle obsahuje hotové `api/vendor/`, `web/dist/`, `manual/generated/` i
 ## CLI nástroje
 
 ```bash
-php api/bin/migrate.php              # spustí pending migrace
-php api/bin/migrate.php --status     # vypíše stav migrací
-php api/bin/setup.php                # interaktivní úvodní zřízení (cfg + DB + ARES + admin)
-php api/bin/sample.php               # vygeneruje testovací data (po setupu)
-php api/bin/reset.php                # smaže všechna user-data (CLI only, vyžaduje "ANO")
-php api/bin/reset.php --yes          # bez potvrzení
-php api/bin/reset-2fa.php <email>    # nouzově vypne 2FA uživateli podle e-mailu
-php api/bin/recompute-stats.php      # přepočítá agregované statistiky
+php api/bin/migrate.php                    # spustí pending migrace
+php api/bin/migrate.php --status           # vypíše stav migrací
+php api/bin/setup.php                      # interaktivní úvodní zřízení (cfg + DB + ARES + admin)
+php api/bin/sample.php                     # vygeneruje testovací data — klienti, zakázky, faktury, dodavatelé, přijaté faktury
+php api/bin/reset.php                      # smaže všechna user-data (CLI only, vyžaduje "ANO")
+php api/bin/reset.php --yes                # bez potvrzení
+php api/bin/reset-2fa.php <email>          # nouzově vypne 2FA uživateli podle e-mailu
+php api/bin/recompute-stats.php            # přepočítá agregované statistiky
+php api/bin/cron-scan-purchase-inbox.php   # scan ISDOC/PDF v inbox adresáři → import jako přijaté faktury
 ```
 
 ### Cron skripty
@@ -535,10 +597,16 @@ php api/bin/recompute-stats.php      # přepočítá agregované statistiky
 V `cmd/` jsou připravené `.cmd` (Windows) i `.sh` (Linux) wrappery:
 
 ```bash
-cmd/cron-bank-scan.sh        # každých 15 min — scan příchozích GPC výpisů
-cmd/cron-send-reminders.sh   # 1× denně — upomínky po splatnosti (s --cooldown)
-cmd/cron-cleanup.sh          # 1× denně — čištění expirovaných session, logů, PDF cache
+cmd/cron-bank-scan.sh             # každých 15 min — scan příchozích GPC výpisů
+cmd/cron-send-reminders.sh        # 1× denně — upomínky po splatnosti (s --cooldown)
+cmd/cron-cleanup.sh               # 1× denně — čištění expirovaných session, logů, PDF cache
+cmd/cron-scan-purchase-inbox.sh   # každých 10 min — scan inboxu s ISDOC/PDF přijatých faktur (v4.0.0+)
+cmd/cron-backup-pdf.sh            # 1× denně — záloha PDF (vystavené + přijaté faktury)
 ```
+
+Health a běhový report všech cron skriptů najdeš v UI v **Systém → Plánované úlohy**
+(`/admin/cron-jobs`) — poslední běh, duration, status, JSON report, list
+neimportovaných souborů. Bez konfigurace cronu na hostu UI hlásí *overdue*.
 
 K tomu **`api/bin/cron-version-check.php`** — denní kontrola GitHub Releases
 API, cachuje poslední dostupnou verzi + release notes do `app_meta`. Bez
@@ -595,7 +663,8 @@ Pokud chybí `cfg.php` nebo nelze do DB, frontend i API vrací **503 s instrukce
 ## Dokumentace
 
 **Uživatelský manuál** (HTML, lokálně po instalaci): `https://tvoje-domena.cz/manual` —
-17 kapitol (od přihlášení po Pohoda XML export), fulltext search, sidebar TOC.
+25 kapitol (od přihlášení přes vystavené i přijaté faktury, CRM, výkazy DPH až
+po REST API), fulltext search, sidebar TOC, responsive mobile drawer.
 Zdroj v `manual/*.md`.
 
 **Vývojářská spec** v `source/`:

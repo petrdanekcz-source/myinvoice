@@ -183,8 +183,8 @@ return [
         // Limity nad rámec brute_force (ten řeší jen login). Klíč = max požadavků v daném okně.
         'login_per_min_per_ip'      => 10,           // doplněk k brute_force; ochrana proti spamu z 1 IP
         'forgot_per_hour_per_email' => 3,            // POST /auth/forgot-password
-        'mutation_per_min_per_user' => 60,           // všechna POST/PUT/PATCH/DELETE
-        'read_per_min_per_user'     => 300,          // GET endpointy
+        'mutation_per_min_per_user' => 120,          // všechna POST/PUT/PATCH/DELETE (bulk akce + import jobs)
+        'read_per_min_per_user'     => 1200,         // GET endpointy (CRM dashboard ~16 paralelně, časté refresh)
         'ares_per_min_per_user'     => 30,           // proxy na ARES (cachované, ale brzdí abuse)
         'ai_per_5min_per_user'      => 30,           // Anthropic AI extract + inbox scan (BYOK billing protection)
         'setup_per_hour_per_ip'     => 5,            // /setup wizard endpoint

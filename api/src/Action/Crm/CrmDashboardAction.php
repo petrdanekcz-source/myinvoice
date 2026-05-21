@@ -43,6 +43,14 @@ final class CrmDashboardAction
         return Json::ok($response, $this->crm->monthlyHistory($supplierId, $months, $currency));
     }
 
+    public function yearly(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        $q = $request->getQueryParams();
+        $currency = isset($q['currency']) ? (string) $q['currency'] : null;
+        return Json::ok($response, $this->crm->yearlyHistory($supplierId, $currency));
+    }
+
     public function topClients(Request $request, Response $response): Response
     {
         $supplierId = SupplierGuard::currentId($request);
@@ -171,6 +179,19 @@ final class CrmDashboardAction
         $itemType = (string) ($body['item_type'] ?? '');
         $this->crm->restoreActionItem($supplierId, $userId, $itemType);
         return Json::ok($response, ['ok' => true]);
+    }
+
+    /** Restore ALL dismissed action items for current user. */
+    public function restoreAllActionItems(Request $request, Response $response): Response
+    {
+        $supplierId = SupplierGuard::currentId($request);
+        $user = (array) $request->getAttribute(AuthMiddleware::ATTR_USER, []);
+        $userId = isset($user['id']) ? (int) $user['id'] : 0;
+        if ($userId <= 0) {
+            return Json::error($response, 'unauthorized', 'Unauthorized.', 401);
+        }
+        $removed = $this->crm->restoreAllActionItems($supplierId, $userId);
+        return Json::ok($response, ['ok' => true, 'restored' => $removed]);
     }
 
     /** Cash flow forecast 4 týdny dopředu. */

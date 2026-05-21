@@ -336,7 +336,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
     margin-left: auto;
     margin-right: auto;
 }
-.content pre.code-block { max-width: 100%; }
+.content pre.code-block { max-width: 100%; overflow-x: auto; }
 .content table.md-tab { table-layout: fixed; }
 .content h1 { font-size: 32px; line-height: 1.2; margin: 0 0 24px; color: var(--text); }
 .content h2 { font-size: 24px; line-height: 1.3; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: var(--text); }
@@ -421,14 +421,39 @@ html, body { overflow-x: hidden; max-width: 100%; }
     font-style: italic;
 }
 .content hr { border: 0; border-top: 1px solid var(--border); margin: 32px 0; }
-@media (max-width: 768px) {
-    .layout { grid-template-columns: 1fr; }
-    .sidebar { position: static; height: auto; }
-    .content { padding: 20px; }
+/* Hamburger menu toggle — viditelný pouze na tablet/mobile */
+.menu-toggle {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 20;
+    background: var(--sidebar-accent);
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(108,92,231,0.3);
+}
+/* Tablet portrait + mobile: sidebar slide-in, obsah full width */
+@media (max-width: 1023px) {
+    .menu-toggle { display: block; }
+    .sidebar { transform: translateX(-100%); transition: transform 0.25s; }
+    .sidebar.open { transform: translateX(0); }
+    .content { margin-left: 0; padding: 64px 18px 24px; }
+    .content h1 { font-size: 26px; }
+    .content h2 { font-size: 21px; }
+}
+@media (max-width: 640px) {
+    .content { padding: 64px 16px 20px; }
 }
     </style>
 </head>
 <body>
+<button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
 <div class="layout">
     <aside class="sidebar">
         <div class="sidebar-brand">

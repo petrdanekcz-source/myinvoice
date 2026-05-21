@@ -65,8 +65,27 @@ if (empty($supplierIds)) {
     exit(0);
 }
 
-// System user (id=0 pro cron) — actions ho použijí pro created_by audit.
+// Cron user — actions ho použijí pro created_by audit (FK users.id).
+// 1) explicit config app.cron_user_id pokud nastaven a existuje
+// 2) fallback: první aktivní admin (nejnižší id)
 $cronUserId = (int) $config->get('app.cron_user_id', 0);
+if ($cronUserId > 0) {
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = ? AND is_active = 1");
+    $stmt->execute([$cronUserId]);
+    if (!$stmt->fetchColumn()) {
+        fwrite(STDERR, "[scan-purchase-inbox] WARN: app.cron_user_id={$cronUserId} neexistuje/neaktivní, fallback na admin\n");
+        $cronUserId = 0;
+    }
+}
+if ($cronUserId === 0) {
+    $stmt = $pdo->query("SELECT id FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY id ASC LIMIT 1");
+    $cronUserId = (int) ($stmt->fetchColumn() ?: 0);
+    if ($cronUserId === 0) {
+        fwrite(STDERR, "[scan-purchase-inbox] FATAL: žádný aktivní admin uživatel — nelze pokračovat (created_by FK).\n");
+        $run->finish('error', ['error' => 'no admin user for created_by audit']);
+        exit(1);
+    }
+}
 
 $container = Bootstrap::buildApp()->getContainer();
 $scanner   = $container->get(PurchaseInvoiceInboxScanner::class);
@@ -111,6 +130,24 @@ if (!empty($totalSummary['details'])) {
     }
 }
 
+// Normalize details: relative path (skrýt absolute system path), limit na ~50 items pro JSON velikost
+$inboxDirCfg = (string) $config->get('purchase_invoice.inbox_dir', '');
+$inboxReal   = $inboxDirCfg !== '' ? realpath($inboxDirCfg) : false;
+$detailsForReport = array_slice(array_map(static function (array $d) use ($inboxReal): array {
+    $file = (string) ($d['file'] ?? '');
+    if ($inboxReal !== false && $file !== '' && str_starts_with($file, $inboxReal)) {
+        $file = ltrim(substr($file, strlen($inboxReal)), DIRECTORY_SEPARATOR . '/');
+    } else {
+        $file = basename($file);
+    }
+    return [
+        'supplier_id' => $d['supplier_id'] ?? null,
+        'file'        => $file,
+        'status'      => (string) ($d['status'] ?? ''),
+        'reason'      => (string) ($d['reason'] ?? ''),
+    ];
+}, $totalSummary['details']), 0, 50);
+
 $run->finish('ok', [
     'suppliers'           => $totalSummary['suppliers'],
     'created'             => $totalSummary['created'],
@@ -118,4 +155,6 @@ $run->finish('ok', [
     'failed'              => $totalSummary['failed'],
     'duration_ms'         => $ms,
     'non_imported_count'  => count($totalSummary['details']),
+    'non_imported'        => $detailsForReport,
+    'non_imported_truncated' => count($totalSummary['details']) > count($detailsForReport),
 ]);

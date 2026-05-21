@@ -312,6 +312,7 @@ final class Routes
         $app->get    ('/api/crm/top-vendors',  [CrmDashboardAction::class, 'topVendors']);
         $app->get    ('/api/crm/aging-receivables', [CrmDashboardAction::class, 'agingReceivables']);
         $app->get    ('/api/crm/aging-payables',    [CrmDashboardAction::class, 'agingPayables']);
+        $app->get    ('/api/crm/yearly',            [CrmDashboardAction::class, 'yearly']);
         $app->get    ('/api/crm/dso',               [CrmDashboardAction::class, 'dso']);
         $app->get    ('/api/crm/payment-punctuality', [CrmDashboardAction::class, 'punctuality']);
         $app->get    ('/api/crm/concentration',     [CrmDashboardAction::class, 'concentration']);
@@ -320,6 +321,7 @@ final class Routes
         $app->get    ('/api/crm/action-items',      [CrmDashboardAction::class, 'actionItems']);
         $app->post   ('/api/crm/action-items/dismiss', [CrmDashboardAction::class, 'dismissActionItem']);
         $app->post   ('/api/crm/action-items/restore', [CrmDashboardAction::class, 'restoreActionItem']);
+        $app->post   ('/api/crm/action-items/restore-all', [CrmDashboardAction::class, 'restoreAllActionItems']);
         $app->get    ('/api/crm/cash-flow-forecast', [CrmDashboardAction::class, 'cashFlowForecast']);
         $app->get    ('/api/crm/late-risk',         [CrmDashboardAction::class, 'lateRisk']);
         $app->get    ('/api/crm/reminder-effectiveness', [CrmDashboardAction::class, 'reminderEffectiveness']);

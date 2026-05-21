@@ -133,6 +133,7 @@ $wipe = [
     'login_attempts',
     'api_tokens',                    // Personal Access Tokens (FK→users, ale TRUNCATE FK ignoruje)
     'activity_log',
+    'cron_runs',                     // cron heartbeat historie (smaže i ?_last_report pro UI)
     'email_templates',
     'app_meta',                      // version-check cache + jiné globální K/V; reset = fresh fetch
     'users',

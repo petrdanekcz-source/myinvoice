@@ -136,9 +136,10 @@ function sparklineFor(currency: string): { labels: string[]; values: number[] } 
     <div v-else-if="summary" class="space-y-6">
       <!-- ═══ Sekce 1: VYSTAVENÉ FAKTURY ═══ -->
       <section class="space-y-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-primary-500"></span>
-          {{ t('dashboard.section_issued') }}
+        <h2>
+          <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-primary-50 text-primary-700">
+            {{ t('dashboard.section_issued') }}
+          </span>
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- Revenue card (wide — 2 sloupce na lg+) -->
@@ -199,9 +200,10 @@ function sparklineFor(currency: string): { labels: string[]; values: number[] } 
 
       <!-- ═══ Sekce 2: PŘIJATÉ FAKTURY (visible jen pokud existují YTD) ═══ -->
       <section v-if="(summary.kpi.purchase_count_ytd ?? 0) > 0" class="space-y-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-warning-500"></span>
-          {{ t('dashboard.section_purchase') }}
+        <h2>
+          <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-warning-50 text-warning-600">
+            {{ t('dashboard.section_purchase') }}
+          </span>
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- Costs YTD -->
@@ -277,10 +279,11 @@ function sparklineFor(currency: string): { labels: string[]; values: number[] } 
 
       <!-- ═══ Sekce 3: SPLATNOST POHLEDÁVEK (vystavené, příchozí platby) ═══ -->
       <section v-if="summary.due_buckets.length" class="space-y-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500 flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-primary-500"></span>
-          {{ t('dashboard.section_receivables_due') }}
-          <span class="text-xs font-normal text-neutral-400 normal-case tracking-normal">{{ t('dashboard.receivables_hint') }}</span>
+        <h2 class="flex items-center gap-2 flex-wrap">
+          <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider bg-success-50 text-success-600">
+            {{ t('dashboard.section_receivables_due') }}
+          </span>
+          <span class="text-xs text-neutral-400">{{ t('dashboard.receivables_hint') }}</span>
         </h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div v-for="b in summary.due_buckets" :key="`db-today-${b.currency}`"
