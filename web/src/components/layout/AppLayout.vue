@@ -78,15 +78,17 @@ const navSections = computed<NavSection[]>(() => {
         { to: '/recurring',        label: t('nav.recurring'),  icon: ICONS.recurring },
         { to: '/clients',          label: t('nav.clients'),    icon: ICONS.clients },
         { to: '/projects',         label: t('nav.projects'),   icon: ICONS.projects },
-        ...(isAdmin ? [{ to: '/admin/approvals', label: t('nav.approvals'), icon: ICONS.approvals }] : []),
-        ...(isAdmin ? [{ to: '/admin/export',    label: t('nav.exports'),   icon: ICONS.exports   }] : []),
+        ...(isAdmin ? [{ to: '/admin/approvals',          label: t('nav.approvals'),         icon: ICONS.approvals }] : []),
+        ...(isAdmin ? [{ to: '/admin/export',             label: t('nav.exports'),           icon: ICONS.exports   }] : []),
+        ...(isAdmin ? [{ to: '/admin/import?tab=issued',  label: t('nav.imports_issued'),    icon: ICONS.imports   }] : []),
       ],
     },
     {
       title: t('nav.section_purchase'),
       items: [
-        { to: '/purchase-invoices',        label: t('nav.purchase_invoices'),  icon: ICONS.purchase },
-        { to: '/purchase-invoices/export', label: t('nav.purchase_export'),    icon: ICONS.exports },
+        { to: '/purchase-invoices',          label: t('nav.purchase_invoices'),  icon: ICONS.purchase },
+        { to: '/purchase-invoices/export',   label: t('nav.purchase_export'),    icon: ICONS.exports },
+        ...(isAdmin ? [{ to: '/admin/import?tab=purchase', label: t('nav.imports_purchase'),  icon: ICONS.imports }] : []),
       ],
     },
     {
@@ -116,7 +118,6 @@ const navSections = computed<NavSection[]>(() => {
       items: [
         { to: '/admin/settings',         label: t('nav.settings'),        icon: ICONS.settings },
         { to: '/admin/codebooks',        label: t('nav.codebooks'),       icon: ICONS.codebooks },
-        { to: '/admin/import',           label: t('nav.imports'),         icon: ICONS.imports },
         { to: '/admin/integrations',     label: t('nav.integrations'),    icon: ICONS.api_tokens },
         { to: '/admin/users',            label: t('nav.users'),           icon: ICONS.users },
         { to: '/admin/email-templates',  label: t('nav.email_templates'), icon: ICONS.email },

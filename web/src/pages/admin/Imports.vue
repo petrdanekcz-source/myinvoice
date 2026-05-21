@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { uploadImport, type ImportReport, type ImportResultRow, type ImportKind } from '@/api/imports'
 import { purchaseInvoicesApi, type InboxScanResult } from '@/api/purchaseInvoices'
 import { useToast } from '@/composables/useToast'
@@ -11,9 +11,20 @@ type TabKey = 'issued' | 'purchase'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
 
-const activeTab = ref<TabKey>('issued')
+// Tab inicializace z URL (?tab=issued|purchase) — pojďme respektovat hash i query
+const initialTab: TabKey = (() => {
+  const q = String(route.query.tab ?? '')
+  return q === 'purchase' ? 'purchase' : 'issued'
+})()
+const activeTab = ref<TabKey>(initialTab)
+
+// Watch query.tab — když user clickne v sidebar, route.query se změní, aktualizujme tab
+watch(() => route.query.tab, (v) => {
+  if (v === 'purchase' || v === 'issued') activeTab.value = v
+})
 
 // ── Vystavené (existující flow) ─────────────────────────────────────────────
 const files = ref<File[]>([])

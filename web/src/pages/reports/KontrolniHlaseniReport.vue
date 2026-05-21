@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { reportsApi } from '@/api/reports'
 import { apiErrorMessage } from '@/api/errors'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const now = new Date()
 const year = ref(now.getFullYear())
@@ -32,7 +32,7 @@ function downloadXml() {
 
 const monthOptions = computed(() =>
   Array.from({ length: 12 }, (_, i) =>
-    new Date(2000, i, 1).toLocaleDateString('cs-CZ', { month: 'long' })
+    new Date(2000, i, 1).toLocaleDateString(locale.value === 'en' ? 'en-US' : 'cs-CZ', { month: 'long' })
   )
 )
 const yearOptions = computed(() => {

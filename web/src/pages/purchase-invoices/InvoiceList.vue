@@ -16,7 +16,7 @@ import { apiErrorMessage } from '@/api/errors'
 import TableSkeleton from '@/components/ui/TableSkeleton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const router = useRouter()
 const toast = useToast()
 
@@ -89,9 +89,12 @@ const yearOptions = computed(() => {
   const cur = new Date().getFullYear()
   return [cur, cur - 1, cur - 2, cur - 3, cur - 4]
 })
-const monthOptions = computed(() => Array.from({ length: 12 }, (_, i) =>
-  new Date(2000, i, 1).toLocaleDateString('cs-CZ', { month: 'long' })
-))
+const monthOptions = computed(() => {
+  const locStr = locale.value === 'en' ? 'en-US' : 'cs-CZ'
+  return Array.from({ length: 12 }, (_, i) =>
+    new Date(2000, i, 1).toLocaleDateString(locStr, { month: 'long' })
+  )
+})
 
 const loadedCount = computed(() =>
   groups.value.reduce((sum, g) => sum + g.invoices.length, 0)

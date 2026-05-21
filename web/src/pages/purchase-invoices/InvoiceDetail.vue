@@ -82,7 +82,7 @@ async function remove() {
   if (!confirm(t('purchase_invoice.confirm.delete_draft'))) return
   try {
     await purchaseInvoicesApi.delete(invoice.value.id)
-    toast.success('Smazáno')
+    toast.success(t('common.deleted'))
     router.push('/purchase-invoices')
   } catch (e) {
     toast.error(apiErrorMessage(e))

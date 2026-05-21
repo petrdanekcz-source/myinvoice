@@ -324,8 +324,7 @@ async function onPdfDropped(file: File) {
     await uploadPdfToInvoice(invoiceId.value, file)
   } else {
     pendingPdfFile.value = file
-    toast.success('PDF bude nahráno po uložení faktury')
-    // V tomto MVP nepokoušíme se extrahovat ISDOC client-side — bude až po save.
+    toast.success(t('purchase_invoice.pdf.pending_upload', { name: file.name }))
   }
 }
 
@@ -343,7 +342,7 @@ async function uploadPdfToInvoice(id: number, file: File) {
       uploadedAt: new Date().toISOString(),
     }
     dropzoneVisible.value = false
-    toast.success('PDF nahráno')
+    toast.success(t('purchase_invoice.pdf.uploaded'))
   } catch (e) {
     toast.error(apiErrorMessage(e))
   } finally {
@@ -409,7 +408,7 @@ async function submit() {
       await uploadPdfToInvoice(inv.id, pendingPdfFile.value)
       pendingPdfFile.value = null
     }
-    toast.success(isEdit.value ? 'Uloženo' : 'Vytvořeno')
+    toast.success(isEdit.value ? t('common.saved') : t('common.created'))
     router.push(`/purchase-invoices/${inv.id}`)
   } catch (e: any) {
     const data = e?.response?.data?.error
