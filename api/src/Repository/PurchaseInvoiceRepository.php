@@ -157,17 +157,10 @@ final class PurchaseInvoiceRepository
 
         $whereSql = implode(' AND ', $where);
 
-        $total = null;
-        if ($perPage > 0) {
-            $cntStmt = $this->db->pdo()->prepare(
-                "SELECT COUNT(*) FROM purchase_invoices pi
-                   JOIN clients c ON c.id = pi.vendor_id
-                   JOIN currencies cur ON cur.id = pi.currency_id
-                  WHERE $whereSql"
-            );
-            $cntStmt->execute($params);
-            $total = (int) $cntStmt->fetchColumn();
-        }
+        // MariaDB 10.2+ window function — COUNT(*) OVER() vrací total v každém řádku.
+        // Místo 2 query (COUNT + SELECT s LIMIT) jeden round-trip, žádný race condition
+        // mezi count a paginated select, žádný duplicate WHERE / JOIN parsing.
+        $selectTotal = $perPage > 0 ? ', COUNT(*) OVER() AS total_rows' : '';
 
         $sql = "SELECT pi.id, pi.varsymbol, pi.vendor_invoice_number, pi.document_kind,
                        pi.vendor_id, pi.supplier_id,
@@ -178,6 +171,7 @@ final class PurchaseInvoiceRepository
                        pi.status, pi.booked_at, pi.paid_at, pi.cancelled_at,
                        c.company_name AS vendor_company_name, c.ic AS vendor_ic,
                        DATE_FORMAT(COALESCE(pi.tax_date, pi.issue_date), '%Y-%m') AS month_bucket
+                       {$selectTotal}
                   FROM purchase_invoices pi
                   JOIN clients c ON c.id = pi.vendor_id
                   JOIN currencies cur ON cur.id = pi.currency_id
@@ -200,8 +194,16 @@ final class PurchaseInvoiceRepository
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // total_rows extrahujeme z prvního řádku (window function vrací stejnou hodnotu
+        // v každém řádku). Pokud výsledek je prázdný a používáme pagination, total=0.
+        $total = null;
+        if ($perPage > 0) {
+            $total = !empty($rows) ? (int) $rows[0]['total_rows'] : 0;
+        }
+
         $grouped = [];
         foreach ($rows as $row) {
+            unset($row['total_rows']); // metadata, nepatří do invoice payloadu
             $row = $this->castInvoice($row);
             $month = (string) $row['month_bucket'];
             if (!isset($grouped[$month])) {

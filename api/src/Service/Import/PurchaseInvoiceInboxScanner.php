@@ -87,9 +87,20 @@ final class PurchaseInvoiceInboxScanner
                 break;
             }
 
-            // Realpath check — file MUSÍ být uvnitř inboxReal
+            // Realpath check — file MUSÍ být uvnitř inboxReal.
+            // POZOR: Windows je case-insensitive FS, ale realpath() vrací path s casing
+            // dle prvního použití (může se lišit mezi inboxReal a per-file real).
+            // Na Linuxu je FS case-sensitive — porovnáváme striktně.
             $real = realpath($absPath);
-            if ($real === false || !str_starts_with($real, $inboxReal . DIRECTORY_SEPARATOR)) {
+            if ($real === false) {
+                $failed++;
+                $details[] = ['file' => $absPath, 'status' => 'rejected', 'reason' => 'Nelze resolvovat realpath'];
+                continue;
+            }
+            $isWindows = DIRECTORY_SEPARATOR === '\\';
+            $needle    = ($isWindows ? strtolower($inboxReal) : $inboxReal) . DIRECTORY_SEPARATOR;
+            $haystack  = $isWindows ? strtolower($real) : $real;
+            if (!str_starts_with($haystack, $needle)) {
                 $failed++;
                 $details[] = ['file' => $absPath, 'status' => 'rejected', 'reason' => 'Path traversal'];
                 continue;
