@@ -46,7 +46,10 @@ export interface Unit {
 
 export const codebooksApi = {
   countries:  () => api.get<Country[]>('/codebooks/countries').then((r) => r.data),
-  currencies: () => api.get<Currency[]>('/codebooks/currencies').then((r) => r.data),
+  currencies: (includeInactive = false) =>
+    api.get<Currency[]>('/codebooks/currencies', {
+      params: includeInactive ? { include_inactive: 1 } : undefined,
+    }).then((r) => r.data),
   vatRates:   (country = 'CZ') =>
     api.get<VatRate[]>('/codebooks/vat-rates', { params: { country } }).then((r) => r.data),
   units:      () => api.get<Unit[]>('/codebooks/units').then((r) => r.data),

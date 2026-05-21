@@ -16,6 +16,19 @@ const invoice = ref<PurchaseInvoice | null>(null)
 const loading = ref(true)
 const error = ref('')
 const acting = ref(false)
+const pdfPreviewOpen = ref(true) // default open — user typicky chce vidět faktura inline
+
+// Activity log — paralel s /invoices/{id}/activity
+const activity = ref<Array<{
+  id: number
+  user_id: number | null
+  user_email: string | null
+  user_name: string | null
+  action: string
+  payload: Record<string, unknown> | null
+  ip: string | null
+  created_at: string
+}>>([])
 
 const id = computed(() => Number(route.params.id))
 
@@ -29,6 +42,22 @@ async function load() {
     error.value = apiErrorMessage(e)
   } finally {
     loading.value = false
+  }
+  // Activity log paralel — ne-blokuje main load
+  purchaseInvoicesApi.activity(id.value)
+    .then(a => { activity.value = a })
+    .catch(() => {})
+}
+
+async function deletePdf() {
+  if (!invoice.value || !invoice.value.pdf_path) return
+  if (!confirm(t('purchase_invoice.pdf.delete_confirm'))) return
+  try {
+    await purchaseInvoicesApi.deletePdf(invoice.value.id)
+    toast.success(t('purchase_invoice.pdf.delete_success'))
+    await load()
+  } catch (e) {
+    toast.error(apiErrorMessage(e))
   }
 }
 
@@ -83,6 +112,23 @@ const allowedTransitions = computed<PurchaseInvoiceStatus[]>(() => {
 
 const canEdit = computed(() => invoice.value?.status === 'draft')
 const canDelete = computed(() => invoice.value?.status === 'draft')
+
+/**
+ * Action log helpers — strip "purchase_invoice." prefix, color-code badge per action group.
+ */
+function actionShortLabel(action: string): string {
+  // purchase_invoice.created → created, purchase_invoice.pdf_uploaded → pdf_uploaded
+  return action.replace(/^purchase_invoice\./, '')
+}
+function actionBadgeClass(action: string): string {
+  const short = actionShortLabel(action)
+  if (short === 'created')              return 'bg-success-50 text-success-600 border border-success-500/40'
+  if (short.startsWith('transitioned')) return 'bg-primary-50 text-primary-700 border border-primary-500/40'
+  if (short.includes('pdf'))            return 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+  if (short.includes('deleted') || short.includes('cancelled')) return 'bg-danger-50 text-danger-500 border border-danger-500/40'
+  if (short.includes('updated'))        return 'bg-warning-50 text-warning-600 border border-warning-500/40'
+  return 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+}
 
 /**
  * Context-aware label pro transition tlačítko.
@@ -277,11 +323,9 @@ function transitionLabel(target: PurchaseInvoiceStatus): string {
     </div>
 
     <!-- ═══ Originální PDF od dodavatele ═══ -->
-    <div class="bg-white border border-neutral-200 rounded-lg p-5 shadow-sm">
-      <h3 class="text-sm font-medium text-neutral-700 mb-3">{{ t('purchase_invoice.pdf.title') }}</h3>
-      <div v-if="invoice.pdf_path" class="flex items-center justify-between">
+    <div v-if="invoice.pdf_path" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-neutral-100">
         <div class="flex items-center gap-3">
-          <!-- PDF dokument: realisticky vypadající ikona s "PDF" badge -->
           <svg class="w-7 h-8 shrink-0" viewBox="0 0 32 36" xmlns="http://www.w3.org/2000/svg">
             <path fill="#dc2626" d="M4 2h16l8 8v22a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
             <path fill="#ffffff" opacity="0.35" d="M20 2v8h8z"/>
@@ -289,16 +333,42 @@ function transitionLabel(target: PurchaseInvoiceStatus): string {
           </svg>
           <div>
             <div class="font-medium text-sm">{{ invoice.pdf_original_name || 'invoice.pdf' }}</div>
-            <div class="text-xs text-neutral-500">{{ Math.round((invoice.pdf_size_bytes ?? 0) / 1024) }} KiB · {{ invoice.pdf_uploaded_at ? formatDate(invoice.pdf_uploaded_at.slice(0,10)) : '' }}</div>
+            <div class="text-xs text-neutral-500">{{ Math.round((Number(invoice.pdf_size_bytes) || 0) / 1024) }} KiB · {{ invoice.pdf_uploaded_at ? formatDate(invoice.pdf_uploaded_at.slice(0,10)) : '' }}</div>
           </div>
         </div>
-        <a :href="purchaseInvoicesApi.pdfUrl(invoice.id)" target="_blank"
-           class="cursor-pointer px-3 h-9 text-sm border border-primary-500/40 text-primary-700 hover:bg-primary-50 rounded-md inline-flex items-center gap-1.5">
-          <svg class="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          {{ t('purchase_invoice.pdf.download') }}
-        </a>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button type="button" @click="pdfPreviewOpen = !pdfPreviewOpen"
+            class="cursor-pointer px-3 h-9 text-sm border border-neutral-300 text-neutral-700 hover:bg-neutral-50 rounded-md inline-flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            {{ pdfPreviewOpen ? t('purchase_invoice.pdf.hide') : t('purchase_invoice.pdf.show') }}
+          </button>
+          <a :href="purchaseInvoicesApi.pdfUrl(invoice.id)" target="_blank"
+             class="cursor-pointer px-3 h-9 text-sm border border-primary-500/40 text-primary-700 hover:bg-primary-50 rounded-md inline-flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            {{ t('purchase_invoice.pdf.download') }}
+          </a>
+          <button type="button" @click="deletePdf"
+            class="cursor-pointer px-3 h-9 text-sm border border-danger-500/50 text-danger-500 hover:bg-danger-50 rounded-md inline-flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0 1 16.138 21H7.862a2 2 0 0 1-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>
+            {{ t('purchase_invoice.pdf.delete') }}
+          </button>
+        </div>
       </div>
-      <p v-else class="text-sm text-neutral-500">{{ t('purchase_invoice.pdf.no_pdf') }}</p>
+      <!-- Inline PDF preview přes browser PDF viewer (Chrome/FF/Edge mají built-in) -->
+      <div v-if="pdfPreviewOpen" class="bg-neutral-100">
+        <iframe
+          :src="purchaseInvoicesApi.pdfUrl(invoice.id) + '#view=FitH'"
+          class="w-full h-[80vh] border-0"
+          :title="invoice.pdf_original_name || 'PDF'"
+        ></iframe>
+      </div>
+    </div>
+    <div v-else class="bg-white border border-neutral-200 rounded-lg p-5 shadow-sm">
+      <h3 class="text-sm font-medium text-neutral-700 mb-3">{{ t('purchase_invoice.pdf.title') }}</h3>
+      <p class="text-sm text-neutral-500">{{ t('purchase_invoice.pdf.no_pdf') }}</p>
     </div>
 
     <!-- ═══ Poznámky (jen pokud existují) ═══ -->
@@ -313,6 +383,31 @@ function transitionLabel(target: PurchaseInvoiceStatus): string {
           <div class="text-xs text-neutral-500 mb-1">{{ t('purchase_invoice.fields.note_below_items') }}</div>
           <p class="whitespace-pre-line">{{ invoice.note_below_items }}</p>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ Activity log (paralel s /invoices) ═══ -->
+    <div v-if="activity.length > 0" class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
+      <header class="px-5 py-3 border-b border-neutral-200">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">{{ t('invoice.activity') }}</h3>
+      </header>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <tbody class="divide-y divide-neutral-100">
+            <tr v-for="a in activity" :key="a.id" class="hover:bg-neutral-50 align-top">
+              <td class="px-5 py-2 whitespace-nowrap">
+                <span class="text-xs px-2 py-0.5 rounded font-medium" :class="actionBadgeClass(a.action)">{{ actionShortLabel(a.action) }}</span>
+              </td>
+              <td class="px-3 py-2 text-xs text-neutral-500 whitespace-nowrap">{{ a.user_name || a.user_email || '—' }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-neutral-400 whitespace-nowrap">{{ a.created_at.replace('T', ' ').slice(0, 19) }}</td>
+              <td class="px-3 py-2 text-xs text-neutral-600 break-all whitespace-pre-wrap leading-snug">
+                <template v-if="a.payload">
+                  {{ Object.entries(a.payload).map(([k, v]) => k + '=' + (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(' · ') }}
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

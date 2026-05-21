@@ -191,7 +191,10 @@ async function loadCodebooks() {
   try {
     const [v, c, u] = await Promise.all([
       codebooksApi.vatRates(),
-      codebooksApi.currencies(),
+      // Pro přijaté faktury chceme vidět i neaktivní měny (vendor's currency
+      // může být USD/GBP, ve které nemáme bankovní účet a v Codebooks je marked
+      // is_active=0). Backend přes ?include_inactive=1.
+      codebooksApi.currencies(true),
       codebooksApi.units(),
     ])
     vatRates.value = v

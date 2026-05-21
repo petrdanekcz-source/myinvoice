@@ -299,6 +299,17 @@ export const purchaseInvoicesApi = {
     ).then(r => r.data)
   },
 
+  deletePdf: (id: number) =>
+    api.delete<{ ok: boolean; file_deleted: boolean; still_used_by: number }>(
+      `/purchase-invoices/${id}/pdf`,
+    ).then(r => r.data),
+
+  activity: (id: number) =>
+    api.get<Array<{
+      id: number; user_id: number | null; user_email: string | null; user_name: string | null;
+      action: string; payload: Record<string, unknown> | null; ip: string | null; created_at: string;
+    }>>(`/purchase-invoices/${id}/activity`).then(r => r.data),
+
   pdfUrl: (id: number) => {
     // Přímá navigace v prohlížeči — supplier_id v query param (X-Supplier-Id header se neposílá).
     const sid = localStorage.getItem('myinvoice.current_supplier_id')

@@ -49,6 +49,7 @@ final class PurchaseInvoiceInboxScanner
         private readonly PurchaseInvoiceCalculator $calc,
         private readonly PdfIsdocExtractor $pdfExtractor,
         private readonly IsdocParser $isdocParser,
+        private readonly IsdocToPurchaseInvoiceMapper $mapper,
     ) {}
 
     /**
@@ -196,17 +197,46 @@ final class PurchaseInvoiceInboxScanner
                 continue;
             }
 
-            // Fáze 1: jen log + counter pro dry-run.
-            // Plné create vyžaduje IsdocToPurchaseInvoiceMapper, který je v fázi 2c plánu.
-            // Prozatím vrátíme uživateli „bude implementováno v 2c" pro každý nalezený ISDOC.
-            $skipped++;
-            $details[] = [
-                'file'   => $real,
-                'status' => 'mapper_pending',
-                'reason' => 'ISDOC úspěšně rozpoznán; mapování na purchase_invoices implementováno v fázi 2c (IsdocToPurchaseInvoiceMapper)',
-                'isdoc_invoice_count' => count($parsed['invoices']),
-                'supplier_ic'         => $parsed['supplier_ic'] ?? null,
-            ];
+            // Fáze 2 — mapper aktivní. Pro každou ISDOC invoice v souboru (typicky 1)
+            // vytvoříme draft purchase_invoice + uložíme PDF do archive_storage.
+            if ($dryRun) {
+                $skipped++;
+                $details[] = [
+                    'file'   => $real,
+                    'status' => 'skipped',
+                    'reason' => 'dry-run — nezapisuji do DB',
+                    'isdoc_invoice_count' => count($parsed['invoices']),
+                    'supplier_ic'         => $parsed['supplier_ic'] ?? null,
+                ];
+                continue;
+            }
+
+            $createdInThisFile = 0;
+            foreach ($parsed['invoices'] as $inv) {
+                try {
+                    $result = $this->mapper->map($inv, $supplierId, $userId);
+                    // Archive PDF — uložení do storage + metadata (pdf_hash dedup)
+                    if ($ext === 'pdf') {
+                        $this->archivePdf($result['purchase_invoice_id'], $supplierId, $real, $sha, $size);
+                    }
+                    $created++;
+                    $createdInThisFile++;
+                    $details[] = [
+                        'file'   => $real,
+                        'status' => 'created',
+                        'reason' => $result['vendor_created']
+                            ? 'vytvořen vendor + draft přijaté faktury'
+                            : 'draft přijaté faktury (vendor reuse)',
+                        'purchase_invoice_id' => $result['purchase_invoice_id'],
+                    ];
+                } catch (\InvalidArgumentException $e) {
+                    $failed++;
+                    $details[] = ['file' => $real, 'status' => 'rejected', 'reason' => $e->getMessage()];
+                } catch (\Throwable $e) {
+                    $failed++;
+                    $details[] = ['file' => $real, 'status' => 'failed', 'reason' => 'Mapper error: ' . $e->getMessage()];
+                }
+            }
         }
 
         return [
@@ -265,6 +295,32 @@ final class PurchaseInvoiceInboxScanner
             return $bytes;
         }
         return null;
+    }
+
+    /**
+     * Zkopíruje PDF z inboxu do archive_storage (mimo webroot) a uloží metadata na fakturu.
+     * Dedup: pokud už existuje soubor se stejným SHA-256 v archivu, jen reuse path.
+     */
+    private function archivePdf(int $purchaseInvoiceId, int $supplierId, string $sourcePath, string $sha256, int $size): void
+    {
+        $archiveRoot = (string) $this->config->get('purchase_invoice.archive_storage', '');
+        if ($archiveRoot === '') {
+            $uploads = (string) $this->config->get('storage.uploads_dir', '');
+            $archiveRoot = $uploads !== '' ? dirname($uploads) . '/purchase-invoices'
+                : __DIR__ . '/../../../../storage/purchase-invoices';
+        }
+        $tenantDir = $archiveRoot . DIRECTORY_SEPARATOR . 'supplier-' . $supplierId;
+        if (!is_dir($tenantDir)) @mkdir($tenantDir, 0755, true);
+
+        $diskName = substr($sha256, 0, 16) . '.pdf';
+        $diskPath = $tenantDir . DIRECTORY_SEPARATOR . $diskName;
+        if (!is_file($diskPath)) {
+            @copy($sourcePath, $diskPath);
+        }
+
+        $relPath = 'supplier-' . $supplierId . '/' . $diskName;
+        $originalName = basename($sourcePath);
+        $this->purchaseRepo->setPdfMetadata($purchaseInvoiceId, $supplierId, $relPath, $sha256, $size, $originalName);
     }
 
     private function emptyResult(string $inboxDir, bool $dryRun, array $details): array

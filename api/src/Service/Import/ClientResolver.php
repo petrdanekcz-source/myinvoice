@@ -27,12 +27,49 @@ final class ClientResolver
     ) {}
 
     /**
+     * Resolve klient pro vydané faktury (default — `is_customer=1, is_vendor=0`).
+     *
      * @param array<string,?string> $parsedClient
      * @return array{id:int, created:bool}
      */
     public function resolve(array $parsedClient, int $supplierId): array
     {
-        $ic = $this->normalizeIc($parsedClient['ic'] ?? null);
+        return $this->resolveAny($parsedClient, $supplierId, isCustomer: true, isVendor: false);
+    }
+
+    /**
+     * Resolve vendor pro přijaté faktury — `is_vendor=1`. Pokud existující klient
+     * matchuje IČ ale dosud nebyl vendor, jen flagne is_vendor=1 (zachová is_customer).
+     * Dual-role firma OK.
+     *
+     * @param array<string,?string> $parsedVendor
+     * @return array{id:int, created:bool, role_added:bool}
+     */
+    public function resolveVendor(array $parsedVendor, int $supplierId): array
+    {
+        $r = $this->resolveAny($parsedVendor, $supplierId, isCustomer: false, isVendor: true);
+
+        // Pokud našel existující (created=false), zkontroluj is_vendor flag a doplň.
+        $roleAdded = false;
+        if (!$r['created']) {
+            $stmt = $this->db->pdo()->prepare('SELECT is_vendor FROM clients WHERE id = ?');
+            $stmt->execute([$r['id']]);
+            $isVendor = (int) $stmt->fetchColumn();
+            if ($isVendor === 0) {
+                $this->clients->markAsVendor($r['id']);
+                $roleAdded = true;
+            }
+        }
+        return ['id' => $r['id'], 'created' => $r['created'], 'role_added' => $roleAdded];
+    }
+
+    /**
+     * @param array<string,?string> $parsed
+     * @return array{id:int, created:bool}
+     */
+    private function resolveAny(array $parsed, int $supplierId, bool $isCustomer, bool $isVendor): array
+    {
+        $ic = $this->normalizeIc($parsed['ic'] ?? null);
 
         // 1. Lookup podle (supplier_id, ic)
         if ($ic !== null) {
@@ -45,6 +82,7 @@ final class ClientResolver
                 return ['id' => (int) $existing, 'created' => false];
             }
         }
+        $parsedClient = $parsed;
 
         // 2. ARES merge — pokud IČO je české (8 číslic) a ARES odpoví
         $aresData = null;
@@ -73,6 +111,8 @@ final class ClientResolver
             'main_email'   => $email,
             'phone'        => $parsedClient['phone'] ?? null,
             'language'     => 'cs',
+            'is_customer'  => $isCustomer,
+            'is_vendor'    => $isVendor,
         ];
 
         // 4. Create

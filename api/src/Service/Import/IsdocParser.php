@@ -54,6 +54,9 @@ final class IsdocParser
             return ['supplier_ic' => null, 'invoices' => [['__error' => $e->getMessage()]]];
         }
 
+        // Top-level supplier_ic — zachováno pro BC s issued invoice import flow.
+        // Plus per-invoice `supplier` party data (pro purchase invoice mapper —
+        // vendor identifikace včetně adresy, DIČ, kontaktu).
         $supplierIc = $this->text($xpath, 'i:AccountingSupplierParty/i:Party/i:PartyIdentification/i:ID', $root) ?: null;
 
         return ['supplier_ic' => $supplierIc, 'invoices' => [$parsed]];
@@ -102,6 +105,11 @@ final class IsdocParser
         $partyEl = $xpath->query('i:AccountingCustomerParty/i:Party', $root)->item(0);
         $client = $partyEl instanceof \DOMElement ? $this->parseParty($xpath, $partyEl) : [];
 
+        // Dodavatel: AccountingSupplierParty/Party — pro purchase invoice mapper,
+        // kde my jsme zákazník a potřebujeme vytvořit vendor záznam z těchto dat.
+        $supplierPartyEl = $xpath->query('i:AccountingSupplierParty/i:Party', $root)->item(0);
+        $supplier = $supplierPartyEl instanceof \DOMElement ? $this->parseParty($xpath, $supplierPartyEl) : [];
+
         // Project number — schema-validní ISDOC 6.0.2 obaluje reference do wrapper
         // kolekce (<OrderReferences>/<OrderReference>/<SalesOrderID>) a v contract
         // referenci je @id atribut + <ID> element. Starší / non-conforming exporty
@@ -132,7 +140,8 @@ final class IsdocParser
             'reverse_charge' => $reverseCharge,
             'note_above'     => null,
             'project_number' => $projectNumber,
-            'client'         => $client,
+            'client'         => $client,    // AccountingCustomerParty (zákazník)
+            'supplier'       => $supplier,  // AccountingSupplierParty (dodavatel — pro purchase invoice mapper)
             'items'          => $items,
         ];
     }

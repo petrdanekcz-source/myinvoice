@@ -36,10 +36,14 @@ final class CodebookAction
     public function currencies(Request $request, Response $response): Response
     {
         $sid = (int) $request->getAttribute(SupplierScopeMiddleware::ATTR_CURRENT_ID, 0);
+        // Default: jen aktivní (pro vystavené faktury). ?include_inactive=1 vrátí všechny
+        // (přijaté faktury — vendor's currency může být v měně, ve které nemáme bankovní účet).
+        $includeInactive = !empty($request->getQueryParams()['include_inactive']);
+        $where = $includeInactive ? 'supplier_id = ?' : 'supplier_id = ? AND is_active = 1';
         $stmt = $this->db->pdo()->prepare(
-            'SELECT id, code, label, symbol, name_cs, name_en, decimals, is_active, is_default
-               FROM currencies WHERE supplier_id = ? AND is_active = 1
-              ORDER BY code, is_default DESC, label'
+            "SELECT id, code, label, symbol, name_cs, name_en, decimals, is_active, is_default
+               FROM currencies WHERE $where
+              ORDER BY is_active DESC, code, is_default DESC, label"
         );
         $stmt->execute([$sid]);
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
