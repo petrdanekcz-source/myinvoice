@@ -62,8 +62,16 @@ final class ImportAction
             return Json::error($response, 'no_files', 'Nahrajte alespoň jeden soubor.', 400);
         }
 
+        // `?kind=auto|issued|purchase` — výchozí 'auto' = per-soubor detekce dle IČO
+        // (vydaná vs přijatá faktura). Backward compat: bez parametru behaviour stejný
+        // jako dřív (auto fallback dispatches issued cestu pro non-purchase soubory).
+        $kind = (string) ($request->getQueryParams()['kind'] ?? 'auto');
+        if (!in_array($kind, ['auto', 'issued', 'purchase'], true)) {
+            return Json::error($response, 'invalid_kind', "Neznámý kind '{$kind}', použij auto|issued|purchase.", 400);
+        }
+
         try {
-            $report = $this->importer->importBundle($files, $supplierId, (int) ($user['id'] ?? 0));
+            $report = $this->importer->importBundle($files, $supplierId, (int) ($user['id'] ?? 0), $kind);
         } catch (\Throwable $e) {
             return Json::error($response, 'import_failed', $e->getMessage(), 500);
         }
@@ -71,6 +79,7 @@ final class ImportAction
         $ip = $this->ipMatcher->clientIpFromRequest($request->getServerParams());
         $this->logger->log('invoices.imported', $user['id'] ?? null, null, null, [
             'files'   => count($files),
+            'kind'    => $kind,
             'summary' => $report['summary'],
         ], $ip, $request->getHeaderLine('User-Agent'));
 

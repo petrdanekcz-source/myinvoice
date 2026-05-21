@@ -44,18 +44,35 @@ final class InvoiceImportService
         private readonly PdfIsdocExtractor $pdfIsdoc,
         private readonly SnapshotBuilder $snapshots,
         private readonly InvoiceCalculator $calculator,
+        private readonly IsdocToPurchaseInvoiceMapper $purchaseMapper,
     ) {}
 
     /**
+     * Import balíku souborů — vystavené i přijaté faktury.
+     *
+     * `$kind` parametr:
+     *   - `'issued'`   — všechny soubory zpracovat jako vydané faktury (legacy behavior).
+     *                    Soubory s buyer-tenant IČO (= my zákazník) skipnout jako odmítnuté.
+     *   - `'purchase'` — všechny zpracovat jako přijaté faktury (vendor je supplier z ISDOC).
+     *   - `'auto'`     — per-soubor detekce dle IČO:
+     *       supplier IČO == tenant → my dodavatel → issued cesta
+     *       customer IČO == tenant → my zákazník → purchase cesta
+     *       ani jedno → reject (cizí ISDOC)
+     *
      * @param list<array{name:string, content:string}> $files Vstupní soubory (rozbalené ze ZIP / single).
      * @return array{summary:array<string,int>, results:list<array<string,mixed>>}
      */
-    public function importBundle(array $files, int $supplierId, int $userId): array
+    public function importBundle(array $files, int $supplierId, int $userId, string $kind = 'auto'): array
     {
+        if (!in_array($kind, ['auto', 'issued', 'purchase'], true)) {
+            throw new \InvalidArgumentException("Neznámý kind '{$kind}', použij auto|issued|purchase.");
+        }
+
         $supplierIc = $this->loadSupplierIc($supplierId);
         if ($supplierIc === null) {
             throw new \RuntimeException("Supplier #$supplierId nemá vyplněné IČO — import nemůže ověřit shodu.");
         }
+        $tenantIc = preg_replace('/\D/', '', $supplierIc);
 
         // 1. Rozbalení ZIPů na ploché soubory.
         $flat = [];
@@ -69,17 +86,18 @@ final class InvoiceImportService
             }
         }
 
-        // 2. Parsování všech souborů → seznam (file → invoices).
+        // 2. Parsování všech souborů — žádná supplier_ic validation tady, ta se dělá při dispatch
+        //    (rozdíl mezi issued vs purchase route).
         $parsed = [];
         foreach ($flat as $f) {
-            $r = $this->parseOne($f['name'], $f['content'], $supplierIc);
+            $r = $this->parseRaw($f['name'], $f['content']);
             $parsed[] = ['file' => $f['name']] + $r;
         }
 
-        // 3. Cross-batch analýza emailů — pro každého klienta (po IČO) spočti unikátní emaily.
+        // 3. Cross-batch analýza emailů (jen pro issued cesta).
         $emailMap = $this->buildEmailMap($parsed);
 
-        // 4. Vytvoření klientů, projektů a faktur.
+        // 4. Dispatch + processing.
         $results = [];
         $created = 0;
         $skipped = 0;
@@ -98,8 +116,21 @@ final class InvoiceImportService
                     $failed++;
                     continue;
                 }
+
+                // Auto-detekce per soubor: dle IČO buyer vs supplier
+                $route = $this->detectRoute($inv, $tenantIc, $kind);
+
                 try {
-                    $r = $this->processOne($inv, $supplierId, $userId, $emailMap);
+                    if ($route === 'issued') {
+                        $r = $this->processOne($inv, $supplierId, $userId, $emailMap);
+                    } elseif ($route === 'purchase') {
+                        $r = $this->processPurchase($inv, $supplierId, $userId);
+                    } else {
+                        // 'reject' — ISDOC patří jinému plátci (neshoda IČO s tenantem)
+                        $r = ['status' => 'failed', 'reason' => $route];
+                    }
+                    // Přidej kind do response pro UI
+                    $r['kind'] = $route === 'issued' || $route === 'purchase' ? $route : null;
                     $results[] = ['file' => $label, 'status' => $r['status']] + $r;
                     if ($r['status'] === 'created') $created++;
                     elseif ($r['status'] === 'skipped') $skipped++;
@@ -118,13 +149,73 @@ final class InvoiceImportService
     }
 
     /**
-     * @return array{invoices:list<array<string,mixed>>}|array{error:string}
+     * Per-soubor detekce: kam (issued / purchase / reject) faktura patří.
+     * `$kind='auto'` — porovná tenant IČO s supplier/customer.
+     * `$kind='issued'|'purchase'` — vynutí směr, jen ověří že tenant je ve správné roli.
+     *
+     * @param array<string,mixed> $inv
+     * @return string 'issued'|'purchase' nebo error message (reject reason)
      */
-    private function parseOne(string $name, string $content, string $supplierIc): array
+    private function detectRoute(array $inv, string $tenantIc, string $kind): string
+    {
+        $supplierIc = preg_replace('/\D/', '', (string) ($inv['supplier']['ic'] ?? '')) ?: '';
+        $customerIc = preg_replace('/\D/', '', (string) ($inv['client']['ic'] ?? '')) ?: '';
+
+        // Pokud parser nevyplnil supplier (starší Pohoda XML), fallback na top-level
+        // supplier_ic je už ošetřený přes parser → ale jistota:
+        if ($supplierIc === '' && isset($inv['__supplier_ic'])) {
+            $supplierIc = preg_replace('/\D/', '', (string) $inv['__supplier_ic']) ?: '';
+        }
+
+        $weAreSupplier = $supplierIc !== '' && $supplierIc === $tenantIc;
+        $weAreCustomer = $customerIc !== '' && $customerIc === $tenantIc;
+
+        if ($kind === 'issued') {
+            if (!$weAreSupplier) return "ISDOC patří jinému dodavateli (supplier IČO: {$supplierIc}, tenant: {$tenantIc}).";
+            return 'issued';
+        }
+        if ($kind === 'purchase') {
+            if (!$weAreCustomer) return "ISDOC patří jinému plátci (buyer IČO: {$customerIc}, tenant: {$tenantIc}).";
+            return 'purchase';
+        }
+        // auto
+        if ($weAreSupplier)  return 'issued';
+        if ($weAreCustomer)  return 'purchase';
+        return "Auto-detekce: ani jeden IČO nematchuje tenant (supplier: {$supplierIc}, buyer: {$customerIc}, tenant: {$tenantIc}).";
+    }
+
+    /**
+     * Zpracuje fakturu jako purchase invoice (přijatá).
+     * Reuse IsdocToPurchaseInvoiceMapper.
+     *
+     * @param array<string,mixed> $inv
+     * @return array<string,mixed>
+     */
+    private function processPurchase(array $inv, int $supplierId, int $userId): array
     {
         try {
-            // PDF/A-3 fakturu (typicky s embedded `*.isdoc` přílohou per ISDOC spec)
-            // unwrap přes extractor — pak pokračujeme stejnou cestou jako pro pure XML.
+            $r = $this->purchaseMapper->map($inv, $supplierId, $userId);
+            return [
+                'status' => 'created',
+                'reason' => $r['vendor_created'] ? 'vytvořen vendor + draft přijaté faktury' : 'draft přijaté faktury (vendor reuse)',
+                'purchase_invoice_id' => $r['purchase_invoice_id'],
+                'vendor_id'           => $r['vendor_id'],
+            ];
+        } catch (\InvalidArgumentException $e) {
+            return ['status' => 'failed', 'reason' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Parse jediný soubor bez validation IČO (ta proběhne při dispatch dle kind).
+     * Pro Pohoda XML (nemá AccountingSupplierParty struct v parser výstupu) doplníme
+     * top-level supplier_ic do každé invoice jako `__supplier_ic` hint pro detectRoute.
+     *
+     * @return array{invoices:list<array<string,mixed>>}|array{error:string}
+     */
+    private function parseRaw(string $name, string $content): array
+    {
+        try {
             if ($this->isPdf($name, $content)) {
                 $extracted = $this->pdfIsdoc->extract($content);
                 if ($extracted === null) {
@@ -139,12 +230,17 @@ final class InvoiceImportService
             return ['error' => $e->getMessage()];
         }
 
-        $fileSupplierIc = preg_replace('/\D/', '', (string) ($parsed['supplier_ic'] ?? ''));
-        if ($fileSupplierIc !== '' && $fileSupplierIc !== preg_replace('/\D/', '', $supplierIc)) {
-            return ['error' => "Soubor patří jinému dodavateli (IČO {$fileSupplierIc}), nelze importovat."];
+        $topSupplierIc = (string) ($parsed['supplier_ic'] ?? '');
+        $invoices = $parsed['invoices'] ?? [];
+        // Inject top-level supplier_ic do každé invoice (Pohoda parser nemá supplier party na invoice úrovni)
+        foreach ($invoices as &$inv) {
+            if (is_array($inv) && !isset($inv['__supplier_ic']) && $topSupplierIc !== '') {
+                $inv['__supplier_ic'] = $topSupplierIc;
+            }
         }
+        unset($inv);
 
-        return ['invoices' => $parsed['invoices']];
+        return ['invoices' => $invoices];
     }
 
     /**
