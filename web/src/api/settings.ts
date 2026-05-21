@@ -44,6 +44,18 @@ export interface Supplier {
   email_branding_enabled: boolean
   email_accent_color: string  // #RRGGBB
   has_email_logo?: boolean    // server flag (existence storage/supplier-logos/sup-{id}.png)
+  // Tax settings pro EPO výkazy DPH/KH (migrace 0038, fáze 6)
+  taxpayer_type?: 'fo' | 'po' | null
+  vat_period?: 'monthly' | 'quarterly' | null
+  financial_office_code?: string | null
+  workplace_code?: string | null
+  cz_nace_code?: string | null
+  data_box_type?: string | null
+  data_box_id?: string | null
+  sest_jmeno?: string | null
+  sest_telefon?: string | null
+  sest_email?: string | null
+  sest_funkce?: string | null
   // Globální cfg fallback (read-only) — UI ho ukáže jako placeholder
   // v prázdných polích per-supplier šablon. Hodnota přichází z cfg.varsymbol.templates.
   cfg_varsymbol_fallback?: {

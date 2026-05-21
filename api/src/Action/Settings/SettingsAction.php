@@ -200,7 +200,29 @@ final class SettingsAction
             'invoice_number_period',
             // Per-supplier branding emailů (migrace 0016)
             'email_branding_enabled', 'email_accent_color',
+            // Tax settings pro EPO výkazy (migrace 0038, fáze 6)
+            'taxpayer_type', 'vat_period', 'financial_office_code', 'workplace_code',
+            'cz_nace_code', 'data_box_type', 'data_box_id',
+            'sest_jmeno', 'sest_telefon', 'sest_email', 'sest_funkce',
         ];
+
+        // Validace tax fields
+        if (array_key_exists('taxpayer_type', $body) && $body['taxpayer_type'] !== null
+            && !in_array($body['taxpayer_type'], ['fo', 'po'], true)) {
+            return Json::error($response, 'validation_failed', "taxpayer_type musí být 'fo' (fyzická) nebo 'po' (právnická).", 400);
+        }
+        if (array_key_exists('vat_period', $body) && $body['vat_period'] !== null
+            && !in_array($body['vat_period'], ['monthly', 'quarterly'], true)) {
+            return Json::error($response, 'validation_failed', "vat_period musí být 'monthly' nebo 'quarterly'.", 400);
+        }
+        // Empty string → null pro tax fields (NULL = nevyplněno)
+        foreach (['taxpayer_type', 'vat_period', 'financial_office_code', 'workplace_code',
+                  'cz_nace_code', 'data_box_type', 'data_box_id',
+                  'sest_jmeno', 'sest_telefon', 'sest_email', 'sest_funkce'] as $f) {
+            if (array_key_exists($f, $body) && trim((string) ($body[$f] ?? '')) === '') {
+                $body[$f] = null;
+            }
+        }
         // Validace email_accent_color — musí být hex (#RRGGBB)
         if (array_key_exists('email_accent_color', $body)) {
             $v = trim((string) ($body['email_accent_color'] ?? ''));
