@@ -69,6 +69,9 @@ export const bankApi = {
     api.post<{ ignored: true }>(`/bank-transactions/${txId}/ignore`, {}).then(r => r.data),
   unmatch: (txId: number) =>
     api.post<{ unmatched: true }>(`/bank-transactions/${txId}/unmatch`, {}).then(r => r.data),
+  rematch: (statementId: number) =>
+    api.post<{ considered: number; newly_matched: number; newly_partial: number; still_unmatched: number }>(
+      `/bank-statements/${statementId}/rematch`, {}).then(r => r.data),
   scan: () => api.post<{ scanned: number; imported: number; duplicate: number; errors: number }>(
     '/bank-statements/scan', {},
   ).then(r => r.data),

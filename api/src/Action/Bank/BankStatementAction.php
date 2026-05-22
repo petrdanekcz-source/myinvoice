@@ -616,4 +616,83 @@ final class BankStatementAction
 
         return Json::ok($response, ['ignored' => true]);
     }
+
+    /**
+     * Přepároj všechny dosud nespárované transakce výpisu — užitečné poté, co
+     * uživatel ex-post doplnil přijaté/vystavené faktury, které by se daly napárovat.
+     *
+     * Volá StatementMatcher::match() pro každou transakci ve stavu 'unmatched' nebo
+     * 'auto_partial'. Stávající 'auto_exact', 'manual' a 'ignored' nejsou dotčeny.
+     */
+    public function rematch(Request $request, Response $response, array $args): Response
+    {
+        $statementId = (int) ($args['id'] ?? 0);
+        $sid = SupplierGuard::currentId($request);
+        if ($sid <= 0 || $statementId <= 0) {
+            return Json::error($response, 'not_found', 'Výpis nenalezen.', 404);
+        }
+
+        $pdo = $this->db->pdo();
+        $owned = $pdo->prepare(
+            "SELECT 1 FROM bank_statements bs
+              WHERE bs.id = ?
+                AND EXISTS (
+                  SELECT 1 FROM currencies cur
+                   WHERE cur.supplier_id = ?
+                     AND TRIM(LEADING '0' FROM REGEXP_REPLACE(IFNULL(cur.account_number, ''), '[^0-9]', ''))
+                       = TRIM(LEADING '0' FROM REGEXP_REPLACE(IFNULL(bs.account_number, ''),  '[^0-9]', ''))
+                     AND (bs.bank_code IS NULL OR cur.bank_code IS NULL OR cur.bank_code = bs.bank_code)
+                )"
+        );
+        $owned->execute([$statementId, $sid]);
+        if (!$owned->fetchColumn()) {
+            return Json::error($response, 'not_found', 'Výpis nenalezen.', 404);
+        }
+
+        $txs = $pdo->prepare(
+            "SELECT id FROM bank_transactions
+              WHERE statement_id = ?
+                AND match_status IN ('unmatched', 'auto_partial')"
+        );
+        $txs->execute([$statementId]);
+        $txIds = $txs->fetchAll(\PDO::FETCH_COLUMN);
+
+        $newlyMatched = 0;
+        $newlyPartial = 0;
+        $stillUnmatched = 0;
+        foreach ($txIds as $txId) {
+            $r = $this->matcher->match((int) $txId);
+            $s = (string) ($r['status'] ?? 'unmatched');
+            if ($s === 'auto_exact') $newlyMatched++;
+            elseif ($s === 'auto_partial') $newlyPartial++;
+            else $stillUnmatched++;
+        }
+
+        // Recompute matched_count na výpisu
+        $pdo->prepare(
+            "UPDATE bank_statements
+                SET matched_count = (
+                    SELECT COUNT(*) FROM bank_transactions
+                     WHERE statement_id = ?
+                       AND match_status IN ('auto_exact', 'auto_partial', 'manual')
+                )
+              WHERE id = ?"
+        )->execute([$statementId, $statementId]);
+
+        $userId = (int) (((array) $request->getAttribute(AuthMiddleware::ATTR_USER, []))['id'] ?? 0);
+        $ip = $this->ipMatcher->clientIpFromRequest($request->getServerParams());
+        $this->logger->log('bank.statement_rematch', $userId ?: null, 'bank_statement', $statementId, [
+            'considered'       => count($txIds),
+            'newly_matched'    => $newlyMatched,
+            'newly_partial'    => $newlyPartial,
+            'still_unmatched'  => $stillUnmatched,
+        ], $ip, $request->getHeaderLine('User-Agent'));
+
+        return Json::ok($response, [
+            'considered'      => count($txIds),
+            'newly_matched'   => $newlyMatched,
+            'newly_partial'   => $newlyPartial,
+            'still_unmatched' => $stillUnmatched,
+        ]);
+    }
 }

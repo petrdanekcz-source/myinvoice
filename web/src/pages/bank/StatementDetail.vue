@@ -5,13 +5,16 @@ import { useI18n } from 'vue-i18n'
 import { bankApi, type BankStatementDetail, type BankTransaction } from '@/api/bank'
 import { formatMoney, formatDate } from '@/composables/useFormat'
 import { useHotkey } from '@/composables/useHotkey'
+import { useToast } from '@/composables/useToast'
 import { apiErrorMessage } from '@/api/errors'
 
 const { t } = useI18n()
+const toast = useToast()
 
 const route = useRoute()
 const statement = ref<BankStatementDetail | null>(null)
 const loading = ref(true)
+const rematching = ref(false)
 const matchingTx = ref<number | null>(null)
 const matchVarsymbol = ref<string>('')
 const matchError = ref<string>('')
@@ -74,6 +77,25 @@ async function unmatchTx(tx: BankTransaction) {
     alert(apiErrorMessage(e, t('bank.unmatch_failed')))
   }
 }
+
+async function rematchStatement() {
+  if (!statement.value || rematching.value) return
+  if (!confirm(t('bank.rematch_confirm'))) return
+  rematching.value = true
+  try {
+    const r = await bankApi.rematch(statement.value.id)
+    toast.success(t('bank.rematch_done', {
+      matched: r.newly_matched,
+      partial: r.newly_partial,
+      remaining: r.still_unmatched,
+    }))
+    await load()
+  } catch (e: any) {
+    toast.error(apiErrorMessage(e, t('bank.rematch_failed')))
+  } finally {
+    rematching.value = false
+  }
+}
 </script>
 
 <template>
@@ -107,10 +129,17 @@ async function unmatchTx(tx: BankTransaction) {
     </div>
 
     <div class="bg-white border border-neutral-200 rounded-lg shadow-sm overflow-hidden">
-      <header class="px-5 py-3 border-b border-neutral-200">
+      <header class="px-5 py-3 border-b border-neutral-200 flex items-center justify-between gap-3">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
           {{ t('bank.transactions') }} ({{ statement.transactions.length }})
         </h2>
+        <button type="button" @click="rematchStatement" :disabled="rematching"
+          class="cursor-pointer h-8 px-3 text-xs border border-primary-500/40 text-primary-700 hover:bg-primary-50 disabled:opacity-50 rounded-md font-medium inline-flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" :class="{ 'animate-spin': rematching }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" />
+          </svg>
+          {{ rematching ? t('bank.rematch_running') : t('bank.rematch') }}
+        </button>
       </header>
       <!-- Desktop: tabulka -->
       <div class="hidden md:block overflow-x-auto">
