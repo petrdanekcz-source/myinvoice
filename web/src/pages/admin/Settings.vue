@@ -99,6 +99,12 @@ async function saveSupplier() {
       sest_telefon: (supplier.value as any).sest_telefon ?? null,
       sest_email: (supplier.value as any).sest_email ?? null,
       sest_funkce: (supplier.value as any).sest_funkce ?? null,
+      // Doplňky pro DPH/KH XML VetaP
+      street_number_pop: (supplier.value as any).street_number_pop ?? null,
+      street_number_orient: (supplier.value as any).street_number_orient ?? null,
+      opr_jmeno: (supplier.value as any).opr_jmeno ?? null,
+      opr_prijmeni: (supplier.value as any).opr_prijmeni ?? null,
+      opr_postaveni: (supplier.value as any).opr_postaveni ?? null,
     })
     toast.success(t('common.saved'))
     bumpPreview()
@@ -459,11 +465,43 @@ async function removeCurrency(c: CurrencyAccount) {
               <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.cz_nace_code') }}</label>
               <input v-model="supplier.cz_nace_code" type="text" maxlength="8" placeholder="62.01"
                 class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm font-mono" />
+              <p class="text-xs text-neutral-500 mt-1">{{ t('settings.cz_nace_hint') }}</p>
             </div>
             <div>
               <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.data_box_id') }}</label>
               <input v-model="supplier.data_box_id" type="text" maxlength="16"
                 class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm font-mono" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.street_number_pop') }}</label>
+              <input v-model="supplier.street_number_pop" type="text" maxlength="20" placeholder="1104"
+                class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm font-mono" />
+              <p class="text-xs text-neutral-500 mt-1">{{ t('settings.street_number_hint') }}</p>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.street_number_orient') }}</label>
+              <input v-model="supplier.street_number_orient" type="text" maxlength="20" placeholder="36"
+                class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm font-mono" />
+            </div>
+          </div>
+
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-neutral-500 mt-5 mb-2">{{ t('settings.opr_section') }}</h4>
+          <p class="text-xs text-neutral-500 mb-3">{{ t('settings.opr_hint') }}</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.opr_jmeno') }}</label>
+              <input v-model="supplier.opr_jmeno" type="text" maxlength="60"
+                class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.opr_prijmeni') }}</label>
+              <input v-model="supplier.opr_prijmeni" type="text" maxlength="60"
+                class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-neutral-700 mb-1">{{ t('settings.opr_postaveni') }}</label>
+              <input v-model="supplier.opr_postaveni" type="text" maxlength="60" placeholder="jednatel"
+                class="w-full h-9 px-3 border border-neutral-300 rounded-md text-sm" />
             </div>
           </div>
 

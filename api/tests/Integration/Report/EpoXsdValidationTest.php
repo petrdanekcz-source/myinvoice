@@ -108,6 +108,93 @@ final class EpoXsdValidationTest extends TestCase
         $this->assertStringContainsString('<Pisemnost', $result['xml']);
     }
 
+    /**
+     * VetaP coverage — kontroluje, že vygenerovaný DPH + KH XML obsahuje
+     * všechny atributy, které posílá reálné EPO podání (sledováno proti
+     * tomu co MFČR XSD povoluje a co lidé reálně vyplňují v UI).
+     *
+     * Tento test chrání proti regresi typu "přidal jsem nový sloupec do supplier
+     * ale zapomněl jsem ho zapsat do builderu" nebo opačně.
+     */
+    public function testDphdp3VetaPContainsAllSupplierFields(): void
+    {
+        $this->assertVetaPHasExpectedAttributes('dphdp3', 'DPHDP3');
+    }
+
+    public function testDphkh1VetaPContainsAllSupplierFields(): void
+    {
+        $this->assertVetaPHasExpectedAttributes('dphkh1', 'DPHKH1');
+    }
+
+    private function assertVetaPHasExpectedAttributes(string $formCode, string $rootElement): void
+    {
+        $result = ($this->builders[$formCode])();
+        $this->assertNotEmpty($result['xml'], "Builder {$formCode} vrátil prázdné XML");
+
+        $xml = new \SimpleXMLElement($result['xml']);
+        $root = $xml->{$rootElement};
+        $this->assertNotNull($root, "{$rootElement} root element chybí");
+        $vetaP = $root->VetaP;
+        $this->assertNotNull($vetaP, 'VetaP element chybí');
+
+        $attrs = [];
+        foreach ($vetaP->attributes() as $k => $v) $attrs[(string) $k] = (string) $v;
+
+        // Atributy, které MUSÍ být vyplněny pokud má supplier=1 odpovídající
+        // sloupec v DB. Test předpokládá seed/setup data se všemi vyplněnými poli.
+        $expected = [
+            'c_ufo', 'c_pracufo', 'dic', 'typ_ds',
+            'zkrobchjm', 'ulice', 'c_pop', 'c_orient',
+            'naz_obce', 'psc', 'stat',
+            'email', 'c_telef',
+            'opr_jmeno', 'opr_prijmeni', 'opr_postaveni',
+            'sest_jmeno', 'sest_prijmeni', 'sest_telef',
+        ];
+        $missing = [];
+        foreach ($expected as $attr) {
+            if (!array_key_exists($attr, $attrs) || $attrs[$attr] === '') {
+                $missing[] = $attr;
+            }
+        }
+        $this->assertEmpty(
+            $missing,
+            "{$formCode} VetaP chybí atributy: " . implode(', ', $missing)
+                . "\n(supplier=1 možná nemá vyplněná všechna pole — viz Settings → Daňové údaje)",
+        );
+
+        // Ulice nesmí obsahovat trailing číslo, když máme c_pop/c_orient zvlášť
+        if (isset($attrs['c_pop']) || isset($attrs['c_orient'])) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/\d+(?:\/\d+)?$/u',
+                $attrs['ulice'],
+                "ulice obsahuje číslo i když je c_pop/c_orient vyplněno zvlášť — duplicita",
+            );
+        }
+
+        // c_telef MUSÍ být bez `+420` prefixu a bez mezer (EPO konvence — 9 digits)
+        $this->assertDoesNotMatchRegularExpression(
+            '/[\s+]/',
+            $attrs['c_telef'],
+            'c_telef obsahuje mezery nebo + prefix — normalizace neproběhla',
+        );
+
+        // c_okec v VetaD je jen u DPH (KH XSD ho nemá v povolených atributech)
+        $vetaD = $root->VetaD;
+        if ($formCode === 'dphdp3') {
+            $this->assertNotEmpty(
+                (string) $vetaD['c_okec'],
+                'VetaD.c_okec chybí — supplier.cz_nace_code se nepřenáší do XML',
+            );
+        }
+
+        // d_poddp (datum podání) — vždy dnes, sdíleno DPH i KH
+        $this->assertSame(
+            date('d.m.Y'),
+            (string) $vetaD['d_poddp'],
+            'VetaD.d_poddp není dnešní datum',
+        );
+    }
+
     private function assertBuilderPassesXsd(string $formCode): void
     {
         if (!$this->validator->hasSchema($formCode)) {

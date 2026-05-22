@@ -56,6 +56,12 @@ export interface Supplier {
   sest_telefon?: string | null
   sest_email?: string | null
   sest_funkce?: string | null
+  // Doplňky pro DPH/KH XML VetaP (migrace 0043)
+  street_number_pop?: string | null
+  street_number_orient?: string | null
+  opr_jmeno?: string | null
+  opr_prijmeni?: string | null
+  opr_postaveni?: string | null
   // Globální cfg fallback (read-only) — UI ho ukáže jako placeholder
   // v prázdných polích per-supplier šablon. Hodnota přichází z cfg.varsymbol.templates.
   cfg_varsymbol_fallback?: {

@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.6] — 2026-05-22
+
+DPH/KH XML kompletně odpovídá tomu, co posílá EPO portál: doplněny atributy
+`c_okec`, `d_poddp`, `trans` v `<VetaD>`, plus `c_orient`, `c_pop`, `c_telef`,
+`opr_*`, `sest_jmeno`/`sest_prijmeni`/`sest_telef` v `<VetaP>`. KH také získává
+`c_radku` (sekvenční číslo řádku) v sekcích A1/A4/B1/B2 a finální `<VetaC>`
+rekapitulaci se sumami obratů.
+
+### Added
+
+#### EPO výkazy — kompletní `<VetaP>` napříč DPH/KH/SHV
+- Nový shared helper `EpoSupplierBlockBuilder::fillVetaP()` — DPH, KH i SHV sdílí
+  jeden generátor identifikačního bloku poplatníka. Atributy přesně podle toho,
+  co posílá reálné EPO podání:
+  - **Adresa:** `ulice`, `c_pop` (číslo popisné), `c_orient` (orientační), `naz_obce`,
+    `psc`, `stat`. Pokud má uživatel vyplněná samostatná pole `street_number_pop` /
+    `street_number_orient`, použijí se a z `street` se odřízne trailing číslo (aby
+    se neduplicovalo). Jinak fallback parsing z formátu `"Ulice 1104/36"`.
+  - **Kontakt:** `email`, `c_telef`. Telefon je automaticky normalizován —
+    `+420` / `00420` prefix a mezery se strippují (EPO konvence: 9-místné číslo).
+  - **Oprávněná osoba:** `opr_jmeno`, `opr_prijmeni`, `opr_postaveni`
+    (typicky jednatel u s.r.o.) — povinné u právnických osob.
+  - **Sestavitel:** `sest_jmeno`, `sest_prijmeni` (split z DB), `sest_telef`.
+    Pozn.: `sest_email`/`sest_funkce` nejsou v EPO XSD — držíme je jen v DB
+    pro vnitřní UI použití.
+- `normalizeOkec()` — robustní normalizace CZ-NACE / OKEČ hodnoty (`"62.09"` /
+  `"620900"` / `"629000"` → 6-digit string). Hodnotu uživatel zadá v Nastavení,
+  validitu proti číselníku ověřuje proti `mojedane.gov.cz/pmd/dokumentace/ciselniky/ukazka/okec`.
+
+#### DPH (`DphPriznaniBuilder`)
+- VetaD: `c_okec` (CZ-NACE z `supplier.cz_nace_code`), `d_poddp` (datum podání =
+  dnes), `trans` (A = vznikla daňová povinnost / N = nadměrný odpočet,
+  dopočítáno po Veta6).
+- VetaP přes shared helper — všechny atributy odpovídající reálnému EPO podání.
+
+#### KH (`KontrolniHlaseniBuilder`)
+- VetaD: `d_poddp` (datum podání).
+- VetaP přes shared helper — opr_*, sest_*, c_orient, c_pop, c_telef atd.
+- `c_radku` (sekvenční číslo řádku 1..N) přidáno do `VetaA1`, `VetaA4`,
+  `VetaB1`, `VetaB2` — odpovídá reálnému EPO formátu.
+- Nová `<VetaC>` rekapitulace na konci se sumami `obrat23`, `obrat5`, `pln23`,
+  `pln5`, `pln_rez_pren`, `rez_pren23/5`, `celk_zd_a2`.
+
+#### Settings — nová pole pro tax info
+- **Sekce „Daňové údaje":** `cz_nace_hint` odkazující na ARES/mojedane,
+  `street_number_pop` (č.p.), `street_number_orient` (č.o.) s vysvětlením
+  fallback parsingu.
+- **Nová sekce „Oprávněná osoba":** `opr_jmeno`, `opr_prijmeni`, `opr_postaveni`.
+  Povinná u právnických osob; u OSVČ ponechat prázdné.
+- i18n CS+EN.
+
+#### Unit a integration testy
+- 2 nové integration testy (`EpoXsdValidationTest`): kontrolují, že VetaP
+  v DPH i KH obsahuje **všechny** atributy z reálného EPO XML (`c_orient`,
+  `c_pop`, `c_telef`, `opr_*`, `sest_*`) + že `ulice` neduplikuje číslo
+  když je `c_pop`/`c_orient` zvlášť + že `c_telef` je normalizovaný (bez
+  +420 a mezer) + `d_poddp = dnes`.
+- Celkem 335 testů, 704 asercí, vše zelené.
+
+### Migrations
+
+- `0043_supplier_epo_fields.sql` — přidává sloupce `street_number_pop`,
+  `street_number_orient`, `opr_jmeno`, `opr_prijmeni`, `opr_postaveni`
+  do `supplier`. Idempotentní (`ADD COLUMN IF NOT EXISTS`).
+
+### Changed
+
+- `DphPriznaniBuilder.loadSupplier` a `KontrolniHlaseniBuilder.loadSupplier`
+  rozšířené o nová pole (cz_nace_code, opr_*, sest_*, street_number_*).
+- VetaP sdílen mezi DPH a KH přes `EpoSupplierBlockBuilder` (DRY refaktor).
+
 ## [4.0.5] — 2026-05-22
 
 Nová funkce **Kniha DPH** (měsíční VAT žurnál) a zásadní zlepšení AI extrakce

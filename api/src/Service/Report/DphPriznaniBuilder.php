@@ -72,7 +72,7 @@ final class DphPriznaniBuilder
         $pisemnost->appendChild($dphdp3);
 
         // ── VetaD: identifikační údaje (typ podání + perioda) ─────────
-        // POZOR: typ_platce + typ_ds jsou v VetaP, ne VetaD (per EPO XSD).
+        // Per EPO XSD: typ_platce je v VetaD, typ_ds v VetaP.
         $vetaD = $dom->createElement('VetaD');
         $vetaD->setAttribute('k_uladis', 'DPH');
         $vetaD->setAttribute('rok', (string) $year);
@@ -84,35 +84,21 @@ final class DphPriznaniBuilder
         $vetaD->setAttribute('dapdph_forma', 'B'); // B = řádné (default), O/D/E = opravné/dodatečné
         $vetaD->setAttribute('dokument', 'DP3');   // identifikace typu výkazu
         $vetaD->setAttribute('typ_platce', 'P');   // P = plátce DPH (default; I = identifikovaná, S = skupina, N = neplátce)
+        // CZ-NACE klasifikace (hlavní ekonomická činnost, 6-digit) — vyplňuje se
+        // z `supplier.cz_nace_code`. Hodnotu očekávanou EPO ověřuje uživatel
+        // proti číselníku https://mojedane.gov.cz/pmd/dokumentace/ciselniky/ukazka/okec.
+        $okec = EpoSupplierBlockBuilder::normalizeOkec((string) ($supplier['cz_nace_code'] ?? ''));
+        if ($okec !== null) {
+            $vetaD->setAttribute('c_okec', $okec);
+        }
+        $vetaD->setAttribute('d_poddp', date('d.m.Y')); // datum podání (dnes)
+        // trans: A = vznikla daňová povinnost (vlastní daň > 0), N = nevznikla.
+        // Spočteme níže po sestavení Veta6 a setneme přes setAttribute.
         $dphdp3->appendChild($vetaD);
 
         // ── VetaP: identifikace daňového subjektu ─────────────────────
         $vetaP = $dom->createElement('VetaP');
-        $vetaP->setAttribute('c_ufo', (string) ($supplier['financial_office_code'] ?: '451'));
-        if (!empty($supplier['workplace_code'])) {
-            $vetaP->setAttribute('c_pracufo', (string) $supplier['workplace_code']);
-        }
-        // DIČ — pattern [0-9]{1,10}, takže strip "CZ" prefix.
-        $dic = (string) ($supplier['dic'] ?? '');
-        $dicDigits = preg_replace('/^CZ/i', '', $dic) ?? $dic;
-        $vetaP->setAttribute('dic', $dicDigits);
-        $vetaP->setAttribute('typ_ds', $supplier['data_box_type'] ?: 'F'); // F=fyzická, P=právnická, N=žádná DS
-
-        if ($supplier['taxpayer_type'] === 'po') {
-            // PO: zkrobchjm (zkrácené obchodní jméno, ne nazev_pol)
-            $vetaP->setAttribute('zkrobchjm', (string) $supplier['company_name']);
-        } else {
-            $parts = explode(' ', trim((string) $supplier['company_name']), 2);
-            $vetaP->setAttribute('jmeno', $parts[0] ?? '');
-            $vetaP->setAttribute('prijmeni', $parts[1] ?? $parts[0] ?? '');
-        }
-        $vetaP->setAttribute('ulice', (string) ($supplier['street'] ?? ''));
-        $vetaP->setAttribute('naz_obce', (string) ($supplier['city'] ?? ''));
-        $vetaP->setAttribute('psc', preg_replace('/\s/', '', (string) ($supplier['zip'] ?? '')) ?? '');
-        $vetaP->setAttribute('stat', (string) ($supplier['country_iso2'] ?? 'CZ'));
-        if (!empty($supplier['email'])) {
-            $vetaP->setAttribute('email', (string) $supplier['email']);
-        }
+        EpoSupplierBlockBuilder::fillVetaP($vetaP, $supplier);
         $dphdp3->appendChild($vetaP);
 
         // ── Veta1: tuzemská plnění (řádky 1, 2, 40, 41) ────────────────
@@ -152,6 +138,10 @@ final class DphPriznaniBuilder
         $dphdp3->appendChild($vetaR);
 
         $vlastniDan = $totalDanZdanitelne - $totalDanOdpocitatelne;
+
+        // trans: A = vznikla daňová povinnost (kladná vlastní daň), N = nevznikla
+        // (nadměrný odpočet / nulový rozdíl). Setneme až teď, kdy máme spočítáno.
+        $vetaD->setAttribute('trans', $vlastniDan > 0 ? 'A' : 'N');
 
         // Termín podání: 25. den následujícího měsíce po skončení období
         $deadlineMonth = $quarter !== null ? ($quarter * 3 + 1) : ($month + 1);
@@ -193,7 +183,11 @@ final class DphPriznaniBuilder
                     COALESCE(c.iso2, 'CZ') AS country_iso2,
                     s.ic, s.dic, s.is_vat_payer,
                     s.taxpayer_type, s.vat_period, s.financial_office_code,
-                    s.workplace_code, s.data_box_type, s.data_box_id, s.email, s.phone
+                    s.workplace_code, s.cz_nace_code, s.data_box_type, s.data_box_id,
+                    s.email, s.phone,
+                    s.street_number_pop, s.street_number_orient,
+                    s.opr_jmeno, s.opr_prijmeni, s.opr_postaveni,
+                    s.sest_jmeno, s.sest_telefon, s.sest_email, s.sest_funkce
                FROM supplier s
           LEFT JOIN countries c ON c.id = s.country_id
               WHERE s.id = ?"
@@ -214,6 +208,8 @@ final class DphPriznaniBuilder
         }
         return null;
     }
+
+    // VetaP a normalizeOkec přesunuto do EpoSupplierBlockBuilder (sdíleno s KH/SHV).
 
     /**
      * Output lines (DPH na výstupu): 1-29 dle DPHDP3.
