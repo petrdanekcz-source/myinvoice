@@ -183,14 +183,19 @@ final class AiPdfExtractor
         $vatRates = $this->loadVatRateMap();
         $defaultVatRateId = $this->matchVatRateId($vatRates, 0.0);
 
+        $documentKind = $this->normalizeDocumentKind((string) ($data['document_kind'] ?? 'invoice'));
+        // Dobropis: položky musí mít záporné quantity (stejný pattern jako CancelInvoiceAction).
+        // AI vrací kladné absolutní hodnoty; sign aplikujeme tady podle document_kind.
+        $sign = $documentKind === 'credit_note' ? -1.0 : 1.0;
+
         $items = [];
         foreach ($data['items'] as $idx => $line) {
             $rate = (float) ($line['vat_rate'] ?? 0);
             $items[] = [
                 'description'            => (string) $line['description'],
-                'quantity'               => (float) $line['quantity'],
+                'quantity'               => $sign * abs((float) $line['quantity']),
                 'unit'                   => (string) ($line['unit'] ?? 'ks'),
-                'unit_price_without_vat' => (float) $line['unit_price_without_vat'],
+                'unit_price_without_vat' => abs((float) $line['unit_price_without_vat']),
                 'vat_rate_id'            => $this->matchVatRateId($vatRates, $rate) ?? $defaultVatRateId,
                 'order_index'            => $idx,
                 // vat_classification_code nesetujeme — PurchaseInvoiceRepository::replaceItems()
@@ -201,7 +206,7 @@ final class AiPdfExtractor
         $payload = [
             'vendor_id'             => $vendorId,
             'vendor_invoice_number' => $this->sanitizeVendorNumber((string) $data['vendor_invoice_number']),
-            'document_kind'         => 'invoice',
+            'document_kind'         => $documentKind,
             'issue_date'            => (string) $data['issue_date'],
             'tax_date'              => isset($data['tax_date']) && $data['tax_date'] ? (string) $data['tax_date'] : null,
             'due_date'              => (string) ($data['due_date'] ?? $data['issue_date']),
@@ -212,7 +217,7 @@ final class AiPdfExtractor
             'reverse_charge'        => false,
             // Rozdíl mezi přesným total a zaokrouhleným total z PDF (např. 229 - 228.69 = 0.31).
             // Calculator pak respektuje uložený total_with_vat = sum(items) + rounding.
-            'rounding'              => $this->computeRounding($data),
+            'rounding'              => $sign * $this->computeRounding($data),
             'language'              => 'cs',
             'items'                 => $items,
         ];
@@ -373,6 +378,18 @@ final class AiPdfExtractor
         $diff = round($rounded - $total, 2);
         // Sanity check — pouze pokud rozdíl je < 1 Kč (typicky zaokrouhlení nahoru/dolů)
         return abs($diff) < 1.0 ? $diff : 0.0;
+    }
+
+    /**
+     * Normalizuje document_kind z AI odpovědi na povolený enum
+     * (whitelist matchující ENUM v `purchase_invoices.document_kind`).
+     */
+    private function normalizeDocumentKind(string $kind): string
+    {
+        $k = strtolower(trim($kind));
+        return in_array($k, ['invoice', 'credit_note', 'advance', 'receipt'], true)
+            ? $k
+            : 'invoice';
     }
 
     private function sanitizeVendorNumber(string $vn): string

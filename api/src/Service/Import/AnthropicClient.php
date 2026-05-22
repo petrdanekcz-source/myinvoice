@@ -167,6 +167,7 @@ JSON schema:
   },
   "vendor_invoice_number": string,
   "varsymbol": string|null,
+  "document_kind": "invoice"|"credit_note"|"advance"|"receipt",
   "issue_date": "YYYY-MM-DD",
   "tax_date": "YYYY-MM-DD"|null,
   "due_date": "YYYY-MM-DD"|null,
@@ -185,6 +186,22 @@ JSON schema:
   "total_with_vat_rounded": number|null,
   "already_paid": boolean
 }
+
+DŮLEŽITÉ k poli `document_kind`:
+- Pokud nadpis / hlavička PDF obsahuje "Opravný daňový doklad", "Dobropis",
+  "Opravná faktura", "Credit note", "Storno faktura", "Storno doklad",
+  nebo doklad jinak signalizuje vrácení / opravu předchozí faktury
+  (např. záporné částky, odkaz na opravovanou fakturu) → vrať `"credit_note"`.
+- Pokud doklad je "Zálohová faktura", "Proforma", "Proforma faktura",
+  "Zálohový list", "Advance invoice" → vrať `"advance"`.
+- Pokud doklad je "Účtenka", "Paragon", "Pokladní doklad", "Receipt" → vrať `"receipt"`.
+- Jinak (běžná faktura / daňový doklad) → vrať `"invoice"`.
+
+DŮLEŽITÉ k položkám u dobropisu (`document_kind = "credit_note"`):
+- `quantity` a `unit_price_without_vat` vrať jako **kladná čísla** (jak jsou na PDF).
+  Záporné znaménko si aplikuje importér automaticky podle `document_kind`.
+- Stejně tak `total_without_vat`, `total_with_vat`, `total_with_vat_rounded`
+  vrať jako **kladná čísla** (absolutní hodnoty z PDF).
 
 DŮLEŽITÉ k poli `already_paid`:
 - Pokud PDF obsahuje text typu "NEPLAŤTE, JIŽ UHRAZENO", "ZAPLACENO",
