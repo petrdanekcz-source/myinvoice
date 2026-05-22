@@ -11,6 +11,7 @@ import { codebooksApi, type Currency } from '@/api/codebooks'
 import TableSkeleton from '@/components/ui/TableSkeleton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import SearchableSelect from '@/components/ui/SearchableSelect.vue'
+import WorkReportModal from '@/components/modals/WorkReportModal.vue'
 
 const { t, tm, rt } = useI18n()
 const toast = useToast()
@@ -382,6 +383,14 @@ function openInvoice(inv: InvoiceListItem) {
   router.push(`/invoices/${inv.id}`)
 }
 
+// Work Report modal: otevíráno z buttonu "Výkaz" v sloupci Stav.
+const wrModalOpen = ref(false)
+const wrModalInvoiceId = ref(0)
+function openWorkReport(id: number) {
+  wrModalInvoiceId.value = id
+  wrModalOpen.value = true
+}
+
 const yearOptions = computed(() => {
   const y = new Date().getFullYear()
   return [y, y - 1, y - 2, y - 3, y - 4]
@@ -594,8 +603,17 @@ const monthOptions = computed(() => (tm('common.months_short') as unknown as str
                 <td class="px-4 py-2.5 text-right font-mono">
                   {{ formatMoney(inv.amount_to_pay ?? inv.total_with_vat, inv.currency) }}
                 </td>
-                <td class="px-4 py-2.5 text-center">
-                  <span class="text-xs px-2 py-0.5 rounded" :class="statusBadgeClass(inv.status)">
+                <td class="px-4 py-2.5 text-center" @click.stop>
+                  <!-- Pro koncepty s workflow projektem (nebo s již vytvořeným výkazem)
+                       zobraz tlačítko "Výkaz" místo "KONCEPT" badge — rychlý přístup k modalu. -->
+                  <button v-if="inv.status === 'draft' && (inv.project_requires_approval || inv.has_work_report)"
+                    @click="openWorkReport(inv.id)"
+                    class="cursor-pointer text-xs px-2 py-0.5 rounded border border-primary-500/40 text-primary-700 hover:bg-primary-50 inline-flex items-center gap-1"
+                    :title="t('invoice.wr_btn')">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-4m3 4v-2"/></svg>
+                    {{ t('invoice.wr_btn') }}
+                  </button>
+                  <span v-else class="text-xs px-2 py-0.5 rounded" :class="statusBadgeClass(inv.status)">
                     {{ statusLabel(inv.status) }}
                   </span>
                   <span v-if="inv.sent_at" class="ml-1 text-xs px-1 py-0.5 rounded bg-success-50 text-success-600"
@@ -677,5 +695,11 @@ const monthOptions = computed(() => (tm('common.months_short') as unknown as str
         </button>
       </div>
     </div>
+
+    <!-- Work report modal — otevřený z buttonu "Výkaz" v sloupci Stav. -->
+    <WorkReportModal v-if="wrModalInvoiceId > 0"
+      v-model="wrModalOpen"
+      :invoice-id="wrModalInvoiceId"
+      @saved="load(true)" />
   </div>
 </template>

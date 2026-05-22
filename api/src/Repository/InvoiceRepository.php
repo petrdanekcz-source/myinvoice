@@ -224,6 +224,8 @@ final class InvoiceRepository
                        i.paid_at, i.cancelled_at,
                        c.company_name AS client_company_name,
                        p.name AS project_name,
+                       p.requires_work_report_approval AS project_requires_approval,
+                       EXISTS (SELECT 1 FROM work_reports wr WHERE wr.invoice_id = i.id) AS has_work_report,
                        DATE_FORMAT(COALESCE(i.tax_date, i.issue_date), '%Y-%m') AS month_bucket
                   FROM invoices i
                   JOIN clients c ON c.id = i.client_id
@@ -570,6 +572,9 @@ final class InvoiceRepository
             $row['project_requires_approval'] = $row['project_requires_approval'] !== null
                 ? (bool) $row['project_requires_approval']
                 : false;
+        }
+        if (array_key_exists('has_work_report', $row)) {
+            $row['has_work_report'] = (bool) $row['has_work_report'];
         }
         return $row;
     }

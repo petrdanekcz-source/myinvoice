@@ -162,6 +162,8 @@ export interface InvoiceListItem {
   cancelled_at: string | null
   client_company_name: string
   project_name: string | null
+  project_requires_approval?: boolean
+  has_work_report?: boolean
   month_bucket: string
 }
 
