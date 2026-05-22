@@ -380,26 +380,26 @@ const hasAnyData = computed(() =>
             <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
               {{ t('stats.top_projects_year', { year: projectStats.this_year }) }}
             </h3>
-            <span class="text-xs font-mono text-neutral-500">{{ projectStats.primary_currency }}</span>
+            <span class="text-xs font-mono text-neutral-500">CZK</span>
           </div>
           <TopProjectsBarChart
             :labels="topProjectChart('this').labels"
             :values="topProjectChart('this').values"
             :greyed-indexes="topProjectChart('this').greyed"
-            :currency="projectStats.primary_currency" />
+            :currency="'CZK'" />
         </div>
         <div v-if="projectStats.top_prev_year.top.length" class="bg-white border border-neutral-200 rounded-lg p-5 shadow-sm">
           <div class="flex items-baseline justify-between mb-3">
             <h3 class="text-sm font-semibold uppercase tracking-wide text-neutral-500">
               {{ t('stats.top_projects_year', { year: projectStats.prev_year }) }}
             </h3>
-            <span class="text-xs font-mono text-neutral-500">{{ projectStats.primary_currency }}</span>
+            <span class="text-xs font-mono text-neutral-500">CZK</span>
           </div>
           <TopProjectsBarChart
             :labels="topProjectChart('prev').labels"
             :values="topProjectChart('prev').values"
             :greyed-indexes="topProjectChart('prev').greyed"
-            :currency="projectStats.primary_currency" />
+            :currency="'CZK'" />
         </div>
       </div>
 
@@ -545,7 +545,7 @@ const hasAnyData = computed(() =>
                     <div>{{ p.name }}</div>
                     <div class="text-xs text-neutral-500 truncate">{{ p.client_company_name }}</div>
                   </td>
-                  <td class="px-4 py-2 text-right font-mono">{{ formatMoney(p.revenue, projectStats.primary_currency) }}</td>
+                  <td class="px-4 py-2 text-right font-mono">{{ formatMoney(p.revenue, 'CZK') }}</td>
                   <td class="px-4 py-2 text-right text-xs text-neutral-500">{{ p.invoice_count }}</td>
                 </tr>
               </tbody>

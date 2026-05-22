@@ -2,36 +2,54 @@
  * Pomocné formátovací funkce pro peníze, datumy a procentua.
  */
 
-export function formatMoney(value: number | null | undefined, currency: string = 'CZK', decimals: number = 2): string {
+import { i18n } from '@/i18n'
+
+// Per-currency default decimals (ISO 4217). JPY/KRW/HUF = 0, BHD/JOD = 3, ostatní 2.
+// Volající může override přes parametr `decimals`.
+const CURRENCY_DECIMALS: Record<string, number> = {
+  JPY: 0, KRW: 0, HUF: 0, ISK: 0, CLP: 0, VND: 0,
+  BHD: 3, IQD: 3, JOD: 3, KWD: 3, LYD: 3, OMR: 3, TND: 3,
+}
+
+function defaultDecimals(currency: string): number {
+  return CURRENCY_DECIMALS[(currency || '').toUpperCase()] ?? 2
+}
+
+function activeLocale(): string {
+  return i18n.global.locale.value === 'en' ? 'en-US' : 'cs-CZ'
+}
+
+export function formatMoney(value: number | null | undefined, currency: string = 'CZK', decimals?: number): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—'
-  const formatter = new Intl.NumberFormat('cs-CZ', {
+  const dec = decimals ?? defaultDecimals(currency)
+  const formatter = new Intl.NumberFormat(activeLocale(), {
     style: 'decimal',
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec,
   })
   const symbol = currency === 'CZK' ? 'Kč' : currency === 'EUR' ? '€' : currency
-  return `${formatter.format(value)} ${symbol}`
+  return `${formatter.format(value)} ${symbol}`
 }
 
 export function formatDate(date: string | null | undefined): string {
   if (!date) return '—'
   const d = new Date(date)
   if (Number.isNaN(d.getTime())) return date
-  return new Intl.DateTimeFormat('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
+  return new Intl.DateTimeFormat(activeLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(d)
 }
 
 export function formatMonth(yyyymm: string): string {
   const [y, m] = yyyymm.split('-').map(Number)
   if (!y || !m) return yyyymm
-  const months = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec']
+  const monthsCs = ['leden', 'únor', 'březen', 'duben', 'květen', 'červen', 'červenec', 'srpen', 'září', 'říjen', 'listopad', 'prosinec']
+  const monthsEn = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const months = i18n.global.locale.value === 'en' ? monthsEn : monthsCs
   return `${months[m - 1]} ${y}`
 }
 
 export function formatPercent(value: number): string {
-  return `${value.toFixed(value % 1 === 0 ? 0 : 2)} %`
+  return `${value.toFixed(value % 1 === 0 ? 0 : 2)} %`
 }
-
-import { i18n } from '@/i18n'
 
 export function statusLabel(status: string): string {
   const t = i18n.global.t
