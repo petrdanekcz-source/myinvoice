@@ -184,6 +184,30 @@ final class AiPdfExtractor
         $defaultVatRateId = $this->matchVatRateId($vatRates, 0.0);
 
         $documentKind = $this->normalizeDocumentKind((string) ($data['document_kind'] ?? 'invoice'));
+
+        // Fallback detekce dobropisu — AI občas vrátí document_kind='invoice', ale items mají
+        // záporné quantity/unit_price (PDF byl dobropis). Trust the amounts: záporné částky
+        // = dobropis, override AI klasifikace.
+        if ($documentKind === 'invoice') {
+            $negativeCount = 0;
+            $positiveCount = 0;
+            foreach ($data['items'] ?? [] as $line) {
+                $q = (float) ($line['quantity'] ?? 0);
+                $p = (float) ($line['unit_price_without_vat'] ?? 0);
+                $sample = $q !== 0.0 ? $q : $p;
+                if ($sample < 0) $negativeCount++;
+                elseif ($sample > 0) $positiveCount++;
+            }
+            if ($negativeCount > 0 && $negativeCount >= $positiveCount) {
+                $this->logger->info('AI extractor: detected credit_note from negative line items, overriding AI document_kind=invoice', [
+                    'vendor_invoice_number' => $data['vendor_invoice_number'] ?? null,
+                    'negative_items' => $negativeCount,
+                    'positive_items' => $positiveCount,
+                ]);
+                $documentKind = 'credit_note';
+            }
+        }
+
         // Dobropis: položky musí mít záporné quantity (stejný pattern jako CancelInvoiceAction).
         // AI vrací kladné absolutní hodnoty; sign aplikujeme tady podle document_kind.
         $sign = $documentKind === 'credit_note' ? -1.0 : 1.0;
