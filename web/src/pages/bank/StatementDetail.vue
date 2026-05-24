@@ -106,25 +106,28 @@ async function rematchStatement() {
     <h1 class="text-2xl font-semibold mt-1">
       {{ t('bank.statement_title', { number: statement.statement_number, date: formatDate(statement.statement_date) }) }}
     </h1>
-    <p class="text-sm text-neutral-500 mt-0.5">{{ t('bank.account') }}<span class="font-mono">{{ statement.account_number }}</span> · {{ statement.file_name }}
+    <p class="text-sm text-neutral-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+      <span>{{ t('bank.account') }}<span class="font-mono">{{ statement.account_number }}</span></span>
+      <span v-if="statement.currency" class="text-xs px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-700 font-medium">{{ statement.currency }}</span>
+      <span>· {{ statement.file_name }}</span>
     </p>
 
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 mb-4">
       <div class="bg-white border border-neutral-200 rounded-lg p-4 shadow-sm">
         <div class="text-xs text-neutral-500 uppercase">{{ t('bank.prev_balance') }}</div>
-        <div class="text-lg font-mono">{{ formatMoney(statement.prev_balance, 'CZK') }}</div>
+        <div class="text-lg font-mono">{{ formatMoney(statement.prev_balance, statement.currency ?? 'CZK') }}</div>
       </div>
       <div class="bg-white border border-neutral-200 rounded-lg p-4 shadow-sm">
         <div class="text-xs text-neutral-500 uppercase">{{ t('bank.curr_balance') }}</div>
-        <div class="text-lg font-mono font-semibold">{{ formatMoney(statement.curr_balance, 'CZK') }}</div>
+        <div class="text-lg font-mono font-semibold">{{ formatMoney(statement.curr_balance, statement.currency ?? 'CZK') }}</div>
       </div>
       <div class="bg-white border border-neutral-200 rounded-lg p-4 shadow-sm">
         <div class="text-xs text-neutral-500 uppercase">{{ t('bank.credit_total') }}</div>
-        <div class="text-lg font-mono text-success-600">+{{ formatMoney(statement.credit_total, 'CZK') }}</div>
+        <div class="text-lg font-mono text-success-600">+{{ formatMoney(statement.credit_total, statement.currency ?? 'CZK') }}</div>
       </div>
       <div class="bg-white border border-neutral-200 rounded-lg p-4 shadow-sm">
         <div class="text-xs text-neutral-500 uppercase">{{ t('bank.debit_total') }}</div>
-        <div class="text-lg font-mono text-danger-500">−{{ formatMoney(statement.debit_total, 'CZK') }}</div>
+        <div class="text-lg font-mono text-danger-500">−{{ formatMoney(statement.debit_total, statement.currency ?? 'CZK') }}</div>
       </div>
     </div>
 
@@ -160,7 +163,7 @@ async function rematchStatement() {
             <td class="px-3 py-2 text-xs">{{ formatDate(tx.posted_at) }}</td>
             <td class="px-3 py-2 text-right font-mono text-xs"
               :class="tx.amount > 0 ? 'text-success-600' : 'text-danger-500'">
-              {{ tx.amount > 0 ? '+' : '' }}{{ formatMoney(tx.amount, 'CZK') }}
+              {{ tx.amount > 0 ? '+' : '' }}{{ formatMoney(tx.amount, tx.currency ?? statement.currency ?? 'CZK') }}
             </td>
             <td class="px-3 py-2 font-mono text-xs">
               <span v-if="tx.variable_symbol">{{ tx.variable_symbol }}</span>
@@ -211,7 +214,7 @@ async function rematchStatement() {
           <div class="flex items-baseline justify-between gap-2">
             <div class="font-mono text-base font-semibold whitespace-nowrap"
               :class="tx.amount > 0 ? 'text-success-600' : 'text-danger-500'">
-              {{ tx.amount > 0 ? '+' : '' }}{{ formatMoney(tx.amount, 'CZK') }}
+              {{ tx.amount > 0 ? '+' : '' }}{{ formatMoney(tx.amount, tx.currency ?? statement.currency ?? 'CZK') }}
             </div>
             <span class="text-xs px-2 py-0.5 rounded font-medium whitespace-nowrap" :class="statusBadge(tx.match_status)">
               {{ statusLabel(tx.match_status) }}

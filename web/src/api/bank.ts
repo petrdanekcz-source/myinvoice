@@ -22,6 +22,7 @@ export interface BankTransaction {
   statement_id: number
   posted_at: string
   amount: number
+  currency: string | null
   variable_symbol: string | null
   constant_symbol: string | null
   specific_symbol: string | null

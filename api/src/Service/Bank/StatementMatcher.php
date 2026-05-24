@@ -33,7 +33,8 @@ final class StatementMatcher
     {
         $pdo = $this->db->pdo();
         $tx = $pdo->prepare(
-            'SELECT bt.*, bs.account_number AS recipient_account, bs.bank_code AS recipient_bank
+            'SELECT bt.*, bs.account_number AS recipient_account, bs.bank_code AS recipient_bank,
+                    bs.currency AS statement_currency
                FROM bank_transactions bt
                JOIN bank_statements   bs ON bs.id = bt.statement_id
               WHERE bt.id = ?'
@@ -48,6 +49,14 @@ final class StatementMatcher
         if (!$vs) {
             return ['status' => 'unmatched', 'reason' => 'no_vs'];
         }
+        // Currency guard: tx currency (preferováno) → statement currency
+        // (fallback) → null (backward compat — staré výpisy bez měny matchují
+        // jakoukoli fakturu, jak to dělaly před fixem v4.1.0).
+        $txCurrency = is_string($row['currency'] ?? null) && $row['currency'] !== ''
+            ? (string) $row['currency']
+            : (is_string($row['statement_currency'] ?? null) && $row['statement_currency'] !== ''
+                ? (string) $row['statement_currency']
+                : null);
         // Outgoing (amount < 0) → match na purchase_invoice (přijatou) — fáze 3.
         // Incoming (amount > 0) → match na invoice (vydanou) — existing flow.
         $isOutgoing = $amount < 0;
@@ -77,7 +86,7 @@ final class StatementMatcher
 
         // ── Outgoing → purchase_invoice (přijaté faktury) ────────────────
         if ($isOutgoing) {
-            return $this->matchPurchase($pdo, $supplierId, $vs, abs($amount), (string) $row['posted_at'], $transactionId);
+            return $this->matchPurchase($pdo, $supplierId, $vs, abs($amount), (string) $row['posted_at'], $transactionId, $txCurrency);
         }
 
         // ── Incoming → invoice (vystavené faktury) — existing flow ─────────
@@ -86,20 +95,31 @@ final class StatementMatcher
         // za zaplacenou ručně (ať ve výpisu nevisí unmatched). Status/paid_at v tom případě
         // ponecháme — netouchujeme stav, který uživatel nastavil ručně.
         // Proformu povolujeme — zaplacená proforma se označí paid a navíc vytvoří DRAFT finální faktury.
-        $stmt = $pdo->prepare(
-            "SELECT i.id, i.varsymbol, i.amount_to_pay, i.status, i.invoice_type, cur.code AS currency
-               FROM invoices i
-               JOIN currencies cur ON cur.id = i.currency_id
-              WHERE i.supplier_id = ?
-                AND i.varsymbol = ?
-                AND i.status IN ('issued', 'sent', 'reminded', 'paid')
-                AND i.invoice_type IN ('invoice', 'proforma')
-              LIMIT 1"
-        );
-        $stmt->execute([$supplierId, $vs]);
+        // Currency-aware match: pokud tx má currency, najdeme jen fakturu se shodnou
+        // měnou. Bez tohohle guardu by EUR výpis na 1000 EUR napároval CZK fakturu
+        // na 1000 Kč (stejný VS+amount, ale měnově totální nesmysl).
+        $sql = "SELECT i.id, i.varsymbol, i.amount_to_pay, i.status, i.invoice_type, cur.code AS currency
+                  FROM invoices i
+                  JOIN currencies cur ON cur.id = i.currency_id
+                 WHERE i.supplier_id = ?
+                   AND i.varsymbol = ?
+                   AND i.status IN ('issued', 'sent', 'reminded', 'paid')
+                   AND i.invoice_type IN ('invoice', 'proforma')";
+        $params = [$supplierId, $vs];
+        if ($txCurrency !== null) {
+            $sql .= ' AND cur.code = ?';
+            $params[] = $txCurrency;
+        }
+        $sql .= ' LIMIT 1';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $inv = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$inv) {
-            return ['status' => 'unmatched', 'reason' => 'no_invoice_with_vs'];
+            return [
+                'status' => 'unmatched',
+                'reason' => $txCurrency !== null ? 'no_invoice_with_vs_and_currency' : 'no_invoice_with_vs',
+                'tx_currency' => $txCurrency,
+            ];
         }
 
         $alreadyPaid = ($inv['status'] === 'paid');
@@ -157,24 +177,33 @@ final class StatementMatcher
      * bank_transactions.matched_invoice_id slouží jen pro vystavené faktury,
      * pro přijaté používáme payment_matches table (N:N model).
      */
-    private function matchPurchase(\PDO $pdo, int $supplierId, string $vs, float $absAmount, string $postedAt, int $transactionId): array
+    private function matchPurchase(\PDO $pdo, int $supplierId, string $vs, float $absAmount, string $postedAt, int $transactionId, ?string $txCurrency = null): array
     {
         // 'paid' v setu: dovolíme navázat transakci i na ručně zaplacenou přijatou fakturu
         // (ať ve výpisu nevisí). Status/paid_at v tom případě nepřepisujeme.
-        $stmt = $pdo->prepare(
-            "SELECT pi.id, pi.varsymbol, COALESCE(pi.amount_to_pay, pi.total_with_vat, 0) AS amount_to_pay,
-                    pi.status, cur.code AS currency
-               FROM purchase_invoices pi
-          LEFT JOIN currencies cur ON cur.id = pi.currency_id
-              WHERE pi.supplier_id = ?
-                AND pi.varsymbol = ?
-                AND pi.status IN ('received', 'booked', 'paid')
-              LIMIT 1"
-        );
-        $stmt->execute([$supplierId, $vs]);
+        // Currency guard viz match() — bez něj by EUR výdaj napároval CZK přijatou.
+        $sql = "SELECT pi.id, pi.varsymbol, COALESCE(pi.amount_to_pay, pi.total_with_vat, 0) AS amount_to_pay,
+                       pi.status, cur.code AS currency
+                  FROM purchase_invoices pi
+             LEFT JOIN currencies cur ON cur.id = pi.currency_id
+                 WHERE pi.supplier_id = ?
+                   AND pi.varsymbol = ?
+                   AND pi.status IN ('received', 'booked', 'paid')";
+        $params = [$supplierId, $vs];
+        if ($txCurrency !== null) {
+            $sql .= ' AND cur.code = ?';
+            $params[] = $txCurrency;
+        }
+        $sql .= ' LIMIT 1';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $pi = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$pi) {
-            return ['status' => 'unmatched', 'reason' => 'no_purchase_with_vs'];
+            return [
+                'status' => 'unmatched',
+                'reason' => $txCurrency !== null ? 'no_purchase_with_vs_and_currency' : 'no_purchase_with_vs',
+                'tx_currency' => $txCurrency,
+            ];
         }
 
         $alreadyPaid = ($pi['status'] === 'paid');

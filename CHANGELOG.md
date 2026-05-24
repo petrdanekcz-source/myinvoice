@@ -16,6 +16,17 @@ opravy reportované týmiž uživateli na PaaS prostředích.
 
 ### Fixed (Banka)
 
+- **GPC výpis v EUR se zobrazoval jako CZK na detailu výpisu** —
+  `StatementDetail.vue` měl měnu natvrdo na 6 místech (header summary boxy
+  + amount sloupec u transakcí). Teď používá `statement.currency ?? 'CZK'`,
+  per-tx pak `tx.currency ?? statement.currency ?? 'CZK'`. Hlavička detailu
+  navíc zobrazuje měnový badge vedle čísla účtu.
+- **Automatické párování ignorovalo měnu** — `StatementMatcher` načítal
+  `cur.code` faktury jen pro informaci, nepoužíval ho ve WHERE. EUR výpis
+  na 1000 EUR by tak teoreticky napároval CZK fakturu na 1000 Kč se
+  stejným VS jako `auto_exact`. Nový currency guard: tx currency (resp.
+  statement currency fallback) musí být shodná s `currencies.code` faktury;
+  bez currency (staré výpisy) match jako dosud (backward compat).
 - **GPC výpis v EUR se zobrazoval jako CZK** — `StatementImporter` ukládal
   `bank_statements.currency = NULL` (sloupec ignoroval); UI pak měnu
   formátovalo fallbackem na CZK i u skutečně EUR / USD výpisů. Fix:
@@ -28,9 +39,10 @@ opravy reportované týmiž uživateli na PaaS prostředích.
 
 ### Added (Banka)
 
-- **Smazání výpisu** — tlačítko (koš) v seznamu Banka i v detailu výpisu.
-  CASCADE smaže i transakce a payment_matches; status zaplacených faktur
-  zůstává (uživatel řeší ručně, pokud je to relevantní).
+- **Smazání výpisu** — tlačítko (koš) v seznamu Banka, **jen pro admina**
+  (účetní může nahrávat a párovat, mazat ne — forensic integrity uzávěrky
+  DPH/KH). CASCADE smaže i transakce a payment_matches; status zaplacených
+  faktur zůstává (řeš ručně, pokud je to relevantní).
 - **Stažení originálního GPC souboru** — tlačítko v seznamu/detailu vrátí
   originální bajty (uložené v `bank_statements.file_content` od migrace
   0045). Výpisy importované před touto verzí soubor nemají → tlačítko

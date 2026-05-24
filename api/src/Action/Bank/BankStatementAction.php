@@ -197,10 +197,13 @@ final class BankStatementAction
             return Json::error($response, 'not_found', 'Výpis nenalezen.', 404);
         }
 
-        // RBAC — pouze admin/accountant (stejně jako upload)
+        // RBAC — pouze admin. Účetní (accountant) může nahrávat a párovat,
+        // ale destruktivní smazání výpisu vč. všech transakcí + party párování
+        // nechte na adminovi (forensic integrity — uzávěrku DPH/KH je třeba
+        // mít stabilní).
         $user = (array) $request->getAttribute(AuthMiddleware::ATTR_USER, []);
-        if (!in_array(($user['role'] ?? ''), ['admin', 'accountant'], true)) {
-            return Json::error($response, 'forbidden', 'Pouze admin nebo účetní.', 403);
+        if (($user['role'] ?? '') !== 'admin') {
+            return Json::error($response, 'forbidden', 'Pouze admin smí mazat výpisy.', 403);
         }
 
         // Supplier scope check — stejný pattern jako detail()
