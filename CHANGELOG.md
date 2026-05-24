@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] — 2026-05-24
+
+Velký krok u **daňových výkazů** a **banky**. Jádrem je nový `VatLedgerService` —
+jeden kanonický producent VAT řádků, ze kterého teď projektují **všechny** výkazy
+(DPHDP3, KH, Souhrnné hlášení, Kniha DPH) i KPI boxy a predikce. Sjednocení
+odhalilo a opravilo několik daňových chyb. Banka umí založit přijatou fakturu
+přímo z výpisu a chytřeji páruje platby kartou.
+
+### Added (banka)
+
+- **Doklad o úhradě z výpisu.** U odchozí (záporné) platby tlačítko **Vytvořit
+  fakturu** → vybereš existujícího dodavatele (nebo založíš nového) → vznikne
+  koncept přijaté faktury v hrubé částce a otevře se v editoru. Platba se
+  automaticky sváže s konceptem. VS → pole VS, číslo dokladu dočasně `BANK-{id}`.
+- **Chytřejší párování plateb kartou.** Platby bez VS se zkusí spárovat na
+  přijatou fakturu i podle **částky + podobnosti názvu** dodavatele (Jaccard
+  token overlap, normalizace, odstranění právních forem/lokalit). Spáruje jen
+  při jednoznačné shodě.
+- **Tlačítko „Otevřít"** u spárované transakce — skok na navázanou fakturu
+  (vydanou i přijatou).
+- **Bohatší GPC parsing.** Z advice řádků (078/079) se vytáhne **název
+  protistrany** u plateb kartou + doplňující info do popisu.
+- **Seskupení výpisů po měsících** v přehledu.
+
+### Added (daňové výkazy)
+
+- **`VatLedgerService`** — kanonický per-(doklad, sazba) producent VAT řádků
+  sdílený všemi výkazy. Reverse-charge samovyměření, CZK přepočet, klasifikace
+  s per-tenant override (override vyhrává nad globálním).
+- **Sestavitel přiznání — samostatné příjmení.** Nové pole `sest_prijmeni`
+  (sjednoceno s jednatelem `opr_*`). Když je prázdné, builder odvodí příjmení
+  splitem `sest_jmeno` (zpětná kompatibilita). Migrace `0050`.
+- **Historické snížené sazby DPH 15 % / 10 %** (issue #36) — seed `vat_rates`
+  pro doklady před 2024 (periodika, knihy apod.). Migrace `0049`.
+- **DPHDP3 oddíl C** (ř. 20–26) — `Veta2` lineMap.
+
+### Fixed (daňové výkazy)
+
+- **#35 — zařazení dokladů do sekcí KH a řádků DPHDP3.** Pořízení z JČS se už
+  nezdvojuje v B.2; dobropisy nepadají chybně do sumace; sjednotné DIČ→sumace;
+  prahy přes `abs()`; přeskok řádků s nulovým základem.
+- **Souhrnné hlášení — chybějící přepočet kurzu.** SH teď projektuje z ledgeru
+  (základ v CZK), takže cizoměnové dodávky do EU mají správnou částku.
+- **Kniha DPH** — samovyměření RC i podle `is_reverse_charge` (konzistence s
+  DPHDP3), oprava NULL bugu u přijatých dokladů s nevyplněnou hlavičkovou
+  klasifikací (dříve se ticho vynechaly).
+- **Kvartální DPHDP3 export** má v názvu `Q1–Q4` místo měsíce.
+
+### Fixed (import)
+
+- **Worker se nikdy nespouštěl** — sjednocení s funkčním cron mechanismem, cesta
+  z `Bootstrap::rootDir()`, oprava běhu pod IIS a zaseknutých jobů.
+- **`vat_rates` platnost** přes `valid_from`/`valid_to` místo neexistujícího
+  `is_active` (Fakturoid import).
+- **Fakturoid** — stahování příloh (parita s iDokladem).
+- Ruční **smazání import jobu** z UI.
+
+### Fixed (UI)
+
+- **Editor přijaté faktury** — dvě 0% sazby (osvobozeno vs. přenesená DPH) se
+  odliší popiskem, stejně jako u vydané faktury (dřív obě „0%“).
+
+### Changed
+
+- KH, Kniha DPH, KPI boxy a DPH trend přepsány na projekci z `VatLedgerService`
+  (sloučení 3 samostatných builderů, odstranění mrtvého kódu).
+- Deterministické řazení ledger řádků (`ORDER BY` datum, id, položka).
+
+### Tests
+
+- Integrační pokrytí všech daňových případů KH/DPH; zafixovaná Kniha DPH;
+  EPO XSD validace VetaP polí (vč. `sest_prijmeni`). Lifecycle test importu
+  (reapStale / cancel / delete). `Connection::close()` proti kumulaci spojení.
+  Celkem **381 testů** zelených.
+
+### Docs
+
+- Manuál: nová sekce 13.4.3 (přijatá faktura z výpisu) + tip ke kartám;
+  sekce 24 doplněna o sestavitele a pravidla generování DPHDP3/KH.
+
 ## [4.1.3] — 2026-05-24
 
 Volitelné **e-mailové OTP** jako druhý faktor pro uživatele bez authenticator
