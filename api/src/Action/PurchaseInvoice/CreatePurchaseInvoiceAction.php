@@ -81,6 +81,11 @@ final class CreatePurchaseInvoiceAction
         ], $ip, $request->getHeaderLine('User-Agent'));
 
         $invoice = $this->repo->find($id, $supplierId);
+        // Non-blocking varování (např. dobropis s kladným součtem — viz issue #35).
+        $warnings = PurchaseInvoiceValidation::warnings($invoice ?? []);
+        if (!empty($warnings)) {
+            $invoice['_warnings'] = $warnings;
+        }
         return Json::ok($response, $invoice, 201);
     }
 

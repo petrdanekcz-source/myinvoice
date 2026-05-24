@@ -469,6 +469,10 @@ async function submit() {
       pendingPdfFile.value = null
     }
     toast.success(isEdit.value ? t('common.saved') : t('common.created'))
+    // Non-blocking varování ze serveru (např. dobropis s kladným součtem — issue #35).
+    for (const code of inv._warnings ?? []) {
+      toast.warning(t(`purchase_invoice.warning.${code}`))
+    }
     router.push(`/purchase-invoices/${inv.id}`)
   } catch (e: any) {
     const data = e?.response?.data?.error

@@ -97,7 +97,13 @@ final class UpdatePurchaseInvoiceAction
         $action = ($existing['status'] !== 'draft') ? 'purchase_invoice.force_updated' : 'purchase_invoice.updated';
         $this->logger->log($action, $user['id'] ?? null, 'purchase_invoice', $id, null, $ip, $request->getHeaderLine('User-Agent'));
 
-        return Json::ok($response, $this->repo->find($id, $supplierId));
+        $invoice = $this->repo->find($id, $supplierId);
+        // Non-blocking varování (např. dobropis s kladným součtem — viz issue #35).
+        $warnings = PurchaseInvoiceValidation::warnings($invoice ?? []);
+        if (!empty($warnings)) {
+            $invoice['_warnings'] = $warnings;
+        }
+        return Json::ok($response, $invoice);
     }
 
     /**

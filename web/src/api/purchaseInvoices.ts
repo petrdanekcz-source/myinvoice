@@ -115,6 +115,12 @@ export interface PurchaseInvoice {
   created_by: number
   created_at: string
   updated_at: string
+  /**
+   * Non-blocking varování z create/update endpointu (kódy překládané přes
+   * t('purchase_invoice.warning.<code>')). Např. `credit_note_positive_total`
+   * = dobropis má kladný součet (dvojí negace znaménka). Viz issue #35.
+   */
+  _warnings?: string[]
   // Joined fields
   vendor_company_name?: string
   vendor_ic?: string | null

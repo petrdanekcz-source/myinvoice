@@ -134,6 +134,32 @@ final class PurchaseInvoiceValidation
         return $err;
     }
 
+    /**
+     * Non-blocking varování k uložené faktuře (vyhodnocuje se PO recompute, nad
+     * skutečně uloženými sumami). UI je zobrazí jako upozornění — neblokují uložení.
+     *
+     * @param array<string,mixed> $invoice Záznam z PurchaseInvoiceRepository::find().
+     * @return list<string>
+     */
+    public static function warnings(array $invoice): array
+    {
+        $warn = [];
+
+        // Dobropis (opravný daňový doklad) má dle metodiky záporné částky. Kladný
+        // součet typicky znamená dvojí negaci (záporné množství I cena zároveň) →
+        // base = qty × price vyjde kladně a ve výkazech DPH/KH by se plnění přičetlo
+        // místo odečtení (DPHDP3 ř. 40, KH B.2). Záporné znaménko stačí na jedné
+        // straně: −1 ks × 1000, nebo 1 ks × −1000. Viz issue #35.
+        if ((string) ($invoice['document_kind'] ?? 'invoice') === 'credit_note') {
+            $totalBase = (float) ($invoice['total_without_vat'] ?? 0);
+            if ($totalBase > 0.005) {
+                $warn[] = 'credit_note_positive_total';
+            }
+        }
+
+        return $warn;
+    }
+
     private static function isValidDate(string $date): bool
     {
         $d = \DateTimeImmutable::createFromFormat('Y-m-d', $date);

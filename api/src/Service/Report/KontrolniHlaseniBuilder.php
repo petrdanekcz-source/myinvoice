@@ -229,6 +229,10 @@ final class KontrolniHlaseniBuilder
         $vetaC->setAttribute('pln5',         $this->formatAmount($pln5));
         $vetaC->setAttribute('pln_rez_pren', $this->formatAmount($plnRezPren));
         $vetaC->setAttribute('rez_pren23',   $this->formatAmount($rezPren23));
+        // rez_pren5 = 0 záměrně: tuzemský reverse charge (§ 92a–92e — stavební práce,
+        // odpad, zlato, …) je v ČR vždy v základní sazbě 21 %, snížená 12% RC neexistuje.
+        // Navíc vat_rate_snapshot je u RC plnění při uložení nulován (InvoiceCalculator),
+        // takže rozpad po sazbě stejně není zpětně dostupný.
         $vetaC->setAttribute('rez_pren5',    '0');
         // celk_zd_a2 = celkový základ pořízení zboží z JČS (sekce A.2)
         $celkA2 = 0.0;
@@ -298,7 +302,18 @@ final class KontrolniHlaseniBuilder
                 'base12'            => $breakdown['base12'],
                 'vat12'             => $breakdown['vat12'],
             ];
-            if ($totalCzk >= self::ITEM_VS_BULK_THRESHOLD) {
+            // Bez zdanitelného základu 21/12 % do A.4/A.5 nepatří — vyloučí reverse charge
+            // (sazba uložená 0), dodání do EU / vývoz a osvobozená plnění, která jinak
+            // tvořila nulové řádky / falešnou duplicitu s A.1 (symetricky k received side).
+            if (abs((float) $row['base21']) < 0.005 && abs((float) $row['base12']) < 0.005) {
+                continue;
+            }
+            // A.4 = jednotlivě jen plnění nad limit S DIČ příjemce (plátce). Plnění bez
+            // DIČ (B2C / zjednodušený daňový doklad) patří dle metodiky do sumace A.5
+            // bez ohledu na částku — dříve se nad limit bez DIČ tiše zahazovalo (issue #35).
+            // abs() — dobropis má záporné částky; záporný doklad nad limit jde do A.4.
+            $hasDic = ($row['counterparty_dic'] ?? '') !== '';
+            if (abs($totalCzk) >= self::ITEM_VS_BULK_THRESHOLD && $hasDic) {
                 $a4[] = $row;
             } else {
                 $a5['count']++;
@@ -316,16 +331,33 @@ final class KontrolniHlaseniBuilder
      */
     private function collectReceivedRows(int $supplierId, string $start, string $end): array
     {
+        // Vyloučit doklady patřící do jiných sekcí KH (symetricky k ostatním kolektorům),
+        // jinak by se objevily duplicitně i v B.2/B.3 s nulovou daní (issue #35):
+        //   - reverse charge příjemce (B.1) → collectReverseChargePurchases
+        //   - pořízení zboží z JČS (A.2)     → collectEuAcquisitions
+        // Klasifikace se posuzuje na úrovni faktury (pi.vat_classification_code) i řádku
+        // (pii.vat_classification_code) — A.2 kolektor čte item-level přes COALESCE.
         $stmt = $this->db->pdo()->prepare("
-            SELECT pi.id, pi.vendor_invoice_number, GREATEST(pi.tax_date, pi.issue_date) AS tax_date,
+            SELECT pi.id, pi.vendor_invoice_number, COALESCE(pi.tax_date, pi.issue_date) AS tax_date,
                    pi.total_with_vat, pi.exchange_rate, COALESCE(cur.code, 'CZK') AS currency,
                    c.dic AS counterparty_dic, c.company_name AS counterparty_name
               FROM purchase_invoices pi
               JOIN clients c ON c.id = pi.vendor_id
          LEFT JOIN currencies cur ON cur.id = pi.currency_id
+         LEFT JOIN vat_classifications vc ON vc.code = pi.vat_classification_code
              WHERE pi.supplier_id = ?
                AND pi.status NOT IN ('draft', 'cancelled')
-               AND GREATEST(pi.tax_date, pi.issue_date) BETWEEN ? AND ?
+               AND COALESCE(pi.tax_date, pi.issue_date) BETWEEN ? AND ?
+               AND NOT (vc.is_reverse_charge = 1 OR (vc.code IS NULL AND pi.reverse_charge = 1))
+               AND (vc.kh_section IS NULL OR vc.kh_section NOT IN ('A.1', 'A.2', 'B.1'))
+               AND NOT EXISTS (
+                   SELECT 1
+                     FROM purchase_invoice_items pii
+                     JOIN vat_classifications vc2
+                       ON vc2.code = COALESCE(pii.vat_classification_code, pi.vat_classification_code)
+                    WHERE pii.purchase_invoice_id = pi.id
+                      AND (vc2.is_reverse_charge = 1 OR vc2.kh_section IN ('A.1', 'A.2', 'B.1'))
+               )
         ");
         $stmt->execute([$supplierId, $start, $end]);
         $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
@@ -345,7 +377,17 @@ final class KontrolniHlaseniBuilder
                 'base12'                => $breakdown['base12'],
                 'vat12'                 => $breakdown['vat12'],
             ];
-            if ($totalCzk >= self::ITEM_VS_BULK_THRESHOLD) {
+            // Bez zdanitelného základu 21/12 % do B.2/B.3 nepatří (osvobozená přijatá
+            // plnění bez nároku na odpočet, 0% atd.) — jinak by tvořila nulové řádky.
+            if (abs((float) $row['base21']) < 0.005 && abs((float) $row['base12']) < 0.005) {
+                continue;
+            }
+            // B.2 = jednotlivě jen plnění nad limit S DIČ dodavatele (plátce). Bez DIČ
+            // (nákup od neplátce / doklad bez DIČ) patří do sumace B.3 bez ohledu na
+            // částku — dříve se nad limit bez DIČ tiše zahazovalo (issue #35).
+            // abs() — viz collectIssuedRows: záporný dobropis nad limit patří do B.2.
+            $hasDic = ($row['counterparty_dic'] ?? '') !== '';
+            if (abs($totalCzk) >= self::ITEM_VS_BULK_THRESHOLD && $hasDic) {
                 $b2[] = $row;
             } else {
                 $b3['count']++;
@@ -455,10 +497,10 @@ final class KontrolniHlaseniBuilder
                     'base12' => 0.0, 'vat12' => 0.0,
                 ];
             }
-            if (abs($vatRate - 21.0) < 0.5) {
+            if ($vatRate >= 20.5) {
                 $byInvoice[$id]['base21'] += $baseCzk;
                 $byInvoice[$id]['vat21']  += $vatCzk;
-            } elseif (abs($vatRate - 12.0) < 0.5) {
+            } elseif ($vatRate > 0.5) {
                 $byInvoice[$id]['base12'] += $baseCzk;
                 $byInvoice[$id]['vat12']  += $vatCzk;
             }
@@ -485,6 +527,9 @@ final class KontrolniHlaseniBuilder
              WHERE pi.supplier_id = ?
                AND pi.status NOT IN ('draft', 'cancelled')
                AND (vc.is_reverse_charge = 1 OR (vc.code IS NULL AND pi.reverse_charge = 1))
+               -- B.1 = jen tuzemský reverse charge; pořízení zboží z JČS (A.2, kód 23)
+               -- má is_reverse_charge=1, ale patří do VetaA2 (collectEuAcquisitions), ne B.1.
+               AND (vc.kh_section IS NULL OR vc.kh_section <> 'A.2')
                AND COALESCE(pi.tax_date, pi.issue_date) BETWEEN ? AND ?
         ");
         $stmt->execute([$supplierId, $start, $end]);
@@ -522,12 +567,15 @@ final class KontrolniHlaseniBuilder
             $rate = (float) $r['vat_rate_snapshot'];
             $baseCzk = (float) $r['base'] * $exchangeRate;
             $vatCzk  = (float) $r['vat']  * $exchangeRate;
-            if (abs($rate - 21.0) < 0.5) {
-                $result['base21'] = $baseCzk;
-                $result['vat21']  = $vatCzk;
-            } elseif (abs($rate - 12.0) < 0.5) {
-                $result['base12'] = $baseCzk;
-                $result['vat12']  = $vatCzk;
+            // Základní sazba (21 %) vs snížená (12 %, KH má jen dvě sazbové kolonky).
+            // Rozsahy místo přesné shody, aby se historické sazby (15 %, 10 %) nezahodily
+            // tiše do nuly — spadnou do snížené. += kvůli více skupinám v jedné kolonce.
+            if ($rate >= 20.5) {
+                $result['base21'] += $baseCzk;
+                $result['vat21']  += $vatCzk;
+            } elseif ($rate > 0.5) {
+                $result['base12'] += $baseCzk;
+                $result['vat12']  += $vatCzk;
             }
         }
         return $result;

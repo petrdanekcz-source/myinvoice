@@ -142,6 +142,17 @@ final class DphPriznaniBuilder
             '11' => ['veta' => 1, 'base' => 'rez_pren5',  'vat' => 'dan_rpren5'],
             '12' => ['veta' => 1, 'base' => 'p_sl23_z',   'vat' => 'dan_psl23_z'],
             '13' => ['veta' => 1, 'base' => 'p_sl5_z',    'vat' => 'dan_psl5_z'],
+            // Veta2 (oddíl C — ostatní plnění s nárokem na odpočet; jen základ, bez daně):
+            //   ř.20 dodání zboží do JČS · ř.21 služby do JČS (§9/1) · ř.22 vývoz (§66)
+            //   ř.23 dodání nového dopr. prostředku neregistrované osobě · ř.24 zasílání zboží
+            //   ř.25 RC dodavatel (§92a) · ř.26 ostatní plnění s nárokem na odpočet
+            '20' => ['veta' => 2, 'base' => 'dod_zb',      'vat' => null],
+            '21' => ['veta' => 2, 'base' => 'pln_sluzby',  'vat' => null],
+            '22' => ['veta' => 2, 'base' => 'pln_vyvoz',   'vat' => null],
+            '23' => ['veta' => 2, 'base' => 'dod_dop_nrg', 'vat' => null],
+            '24' => ['veta' => 2, 'base' => 'pln_zaslani', 'vat' => null],
+            '25' => ['veta' => 2, 'base' => 'pln_rez_pren','vat' => null],
+            '26' => ['veta' => 2, 'base' => 'pln_ost',     'vat' => null],
             // Veta4 (odpočet)
             '40' => ['veta' => 4, 'base' => 'pln23',      'vat' => 'odp_tuz23_nar'],
             '41' => ['veta' => 4, 'base' => 'pln5',       'vat' => 'odp_tuz5_nar'],
@@ -153,6 +164,7 @@ final class DphPriznaniBuilder
         $totalDanZdanitelne = 0.0;
         $totalDanOdpocitatelne = 0.0;
         $veta1Attrs = [];
+        $veta2Attrs = [];
         $veta4Attrs = [];
 
         foreach ($lines as $lineNum => $data) {
@@ -178,6 +190,12 @@ final class DphPriznaniBuilder
             $veta1 = $dom->createElement('Veta1');
             foreach ($veta1Attrs as $k => $v) $veta1->setAttribute($k, $v);
             $dphdp3->appendChild($veta1);
+        }
+        // Veta2 — oddíl C (ř.20-26). XSD vyžaduje pořadí Veta1 → Veta2 → … → Veta4.
+        if (!empty($veta2Attrs)) {
+            $veta2 = $dom->createElement('Veta2');
+            foreach ($veta2Attrs as $k => $v) $veta2->setAttribute($k, $v);
+            $dphdp3->appendChild($veta2);
         }
         if (!empty($veta4Attrs)) {
             $veta4 = $dom->createElement('Veta4');

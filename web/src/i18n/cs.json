@@ -226,6 +226,9 @@
       "invalid_currency_iso": "Zadej platný ISO 4217 kód (3 písmena: USD, GBP, …)",
       "items_required": "Přidej alespoň jednu položku."
     },
+    "warning": {
+      "credit_note_positive_total": "Dobropis má kladný součet — má mít záporné částky. Záporné znaménko stačí na jedné straně (např. −1 ks × 1000, nebo 1 ks × −1000); pokud jsou záporné množství i cena zároveň, výkazy DPH/KH plnění přičtou místo odečtení. Zkontroluj prosím znaménka."
+    },
     "classification": {
       "title": "Klasifikace",
       "expense_category": "Kategorie nákladu",

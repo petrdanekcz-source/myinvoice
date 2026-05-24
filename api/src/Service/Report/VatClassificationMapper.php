@@ -127,9 +127,9 @@ final class VatClassificationMapper
                       i.vat_classification_code,
                       CASE
                           WHEN i.reverse_charge = 1 THEN '20'  -- EU/RC sale default
-                          WHEN ii.vat_rate_snapshot >= 21 THEN '1'   -- 21% tuzemsko
-                          WHEN ii.vat_rate_snapshot >= 12 THEN '2'   -- 12% tuzemsko
-                          WHEN ii.vat_rate_snapshot = 0  THEN '3'   -- osvobozeno
+                          WHEN ii.vat_rate_snapshot >= 20.5 THEN '1'   -- 21% tuzemsko
+                          WHEN ii.vat_rate_snapshot > 0     THEN '2'   -- snížená (12% / hist. 15/10%)
+                          WHEN ii.vat_rate_snapshot = 0     THEN '3'   -- osvobozeno
                           ELSE NULL
                       END
                   ) AS code,
@@ -179,8 +179,8 @@ final class VatClassificationMapper
                       pi.vat_classification_code,
                       CASE
                           WHEN pi.reverse_charge = 1 THEN '5'   -- RC purchase default
-                          WHEN pii.vat_rate_snapshot >= 21 THEN '40' -- 21% nárok
-                          WHEN pii.vat_rate_snapshot >= 12 THEN '41' -- 12% nárok
+                          WHEN pii.vat_rate_snapshot >= 20.5 THEN '40' -- 21% nárok
+                          WHEN pii.vat_rate_snapshot > 0     THEN '41' -- snížená (12% / hist. 15/10%)
                           ELSE NULL
                       END
                   ) AS code,

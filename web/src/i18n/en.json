@@ -226,6 +226,9 @@
       "invalid_currency_iso": "Enter valid ISO 4217 code (3 letters: USD, GBP, …)",
       "items_required": "Add at least one item."
     },
+    "warning": {
+      "credit_note_positive_total": "Credit note has a positive total — it should have negative amounts. A negative sign on one side is enough (e.g. −1 pc × 1000, or 1 pc × −1000); if both quantity and price are negative, VAT/control-statement reports will add the amount instead of subtracting it. Please check the signs."
+    },
     "classification": {
       "title": "Classification",
       "expense_category": "Expense category",
