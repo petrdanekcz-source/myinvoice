@@ -223,12 +223,15 @@ final class DphBookBuilder
                    COALESCE(pii.vat_classification_code, pi.vat_classification_code) AS line_class_code,
                    pii.vat_rate_snapshot AS vat_rate,
                    (CASE WHEN pii.is_fixed_asset = 1 OR pi.is_fixed_asset = 1 THEN 1 ELSE 0 END) AS is_fixed_asset,
+                   MAX(vc.is_reverse_charge) AS code_is_rc,
                    SUM(pii.total_without_vat) AS base,
                    SUM(pii.total_vat) AS vat,
                    SUM(pii.total_with_vat) AS total
               FROM purchase_invoices pi
               JOIN clients c ON c.id = pi.vendor_id
               JOIN purchase_invoice_items pii ON pii.purchase_invoice_id = pi.id
+         LEFT JOIN vat_classifications vc
+                ON vc.code = COALESCE(pii.vat_classification_code, pi.vat_classification_code)
          LEFT JOIN (
                 SELECT purchase_invoice_id, MIN(description) AS description
                   FROM purchase_invoice_items
@@ -264,7 +267,11 @@ final class DphBookBuilder
         // ukázat samovyměřenou daň (jako DPHDP3), jinak by řádek byl 0 a uživatele
         // matlo. Per memory [[project_multicurrency_purchase]] vat se počítá nad
         // basem v invoice currency, pak se přepočte kurzem.
-        if ($direction === 'received' && $vatRaw == 0.0 && !empty($r['reverse_charge']) && $vatRate > 0) {
+        // RC detekce shodná s DphPriznaniBuilder: per-faktura flag NEBO příznak
+        // is_reverse_charge na klasifikaci (kódy 5/23) — jinak by Kniha DPH a DPHDP3
+        // u dokladu bez flagu rozcházely (samovyměřená daň 0 vs. dopočtená).
+        $isRc = !empty($r['reverse_charge']) || !empty($r['code_is_rc']);
+        if ($direction === 'received' && $vatRaw == 0.0 && $isRc && $vatRate > 0) {
             $vatRaw = round($baseRaw * $vatRate / 100, 2);
         }
         $totalRaw = (float) $r['total'];
