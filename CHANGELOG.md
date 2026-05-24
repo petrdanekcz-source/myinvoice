@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Fakturoid)
+
+- **Podpora OAuth2 Client Credentials** (issue #31) — Fakturoid v roce 2024
+  deprecoval personal API tokens pro nově založené účty; jediné dostupné
+  credentials u nového účtu jsou *API v3 přístupové údaje* (Client ID +
+  Client Secret). Externí integrace → Fakturoid teď nabízí přepínač mezi
+  oběma flow:
+  - **OAuth2 (nové účty)** — Client ID + Client Secret. MyInvoice si Bearer
+    token sám obnovuje (POST `/api/v3/oauth/token`, TTL ~2h, cache šifrovaná
+    AES-256-GCM v `supplier.fakturoid_access_token_enc`). Při HTTP 401
+    se token vyhodí a obnoví automaticky.
+  - **Email + API token (starší účty)** — legacy BasicAuth flow zůstává plně
+    funkční pro účty založené před deprecation 2024.
+  Oba způsoby koexistují per-supplier; pokud má supplier vyplněné oba bloky,
+  OAuth2 má prioritu. Žádný impact na existující uživatele — kdo má dnes
+  uložený personal API token, ten dál fachá beze změny.
+
+### Migration
+
+- **0046**: `supplier.fakturoid_client_id`, `fakturoid_client_secret_enc`,
+  `fakturoid_access_token_enc`, `fakturoid_access_token_expires_at` pro
+  OAuth2 flow vedle stávajících BasicAuth polí (migrace 0031).
+
 ## [4.1.0] — 2026-05-24
 
 Dvě regulační opravy DPH výkazů (issue #29, Pavel Třešňák) — reverse charge

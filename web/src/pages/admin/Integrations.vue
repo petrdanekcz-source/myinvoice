@@ -146,12 +146,20 @@ const progressPercent = computed(() => {
 })
 
 // ── Fakturoid credentials state ───────────────────────────────────────
+// Dva paralelní auth flow (issue #31):
+//   - Legacy BasicAuth  : slug + email + api_key (starší účty, deprecated 2024)
+//   - OAuth2 Client Cred: slug + client_id + client_secret (nové účty)
+// User vyplní jeden z bloků (nebo oba — OAuth2 má pak prioritu při requestech).
 const fakStatus = ref<FakturoidCredentialsStatus | null>(null)
+const fakAuthMode = ref<'oauth2' | 'basic'>('oauth2')
 const fakSlug = ref('')
 const fakEmail = ref('')
 const fakApiKey = ref('')
+const fakClientId = ref('')
+const fakClientSecret = ref('')
 const fakSaving = ref(false)
 const fakShowKey = ref(false)
+const fakShowSecret = ref(false)
 const fakTestMsg = ref<{ ok: boolean; text: string } | null>(null)
 
 const fakStartParams = ref({
@@ -168,23 +176,41 @@ async function loadFakStatus() {
     fakStatus.value = await integrationsApi.getFakturoidCreds()
     if (fakStatus.value?.slug) fakSlug.value = fakStatus.value.slug
     if (fakStatus.value?.email) fakEmail.value = fakStatus.value.email
+    if (fakStatus.value?.client_id) fakClientId.value = fakStatus.value.client_id
+    // Auto-pick aktivní auth mode pro úpravu (OAuth2 priorita)
+    if (fakStatus.value?.auth_mode) fakAuthMode.value = fakStatus.value.auth_mode
   } catch (e) {
     toast.error(apiErrorMessage(e))
   }
 }
 
 async function saveFakCreds() {
-  if (!fakSlug.value || !fakEmail.value || !fakApiKey.value) {
-    toast.error('Vyplň všechna pole (slug, email, api_key).')
+  if (!fakSlug.value) {
+    toast.error(t('integrations.fakturoid.slug_required'))
     return
+  }
+  if (fakAuthMode.value === 'oauth2') {
+    if (!fakClientId.value || !fakClientSecret.value) {
+      toast.error(t('integrations.fakturoid.oauth_required'))
+      return
+    }
+  } else {
+    if (!fakEmail.value || !fakApiKey.value) {
+      toast.error(t('integrations.fakturoid.basic_required'))
+      return
+    }
   }
   fakSaving.value = true
   fakTestMsg.value = null
   try {
-    const r = await integrationsApi.setFakturoidCreds(fakSlug.value, fakEmail.value, fakApiKey.value)
+    const payload = fakAuthMode.value === 'oauth2'
+      ? { slug: fakSlug.value, client_id: fakClientId.value, client_secret: fakClientSecret.value }
+      : { slug: fakSlug.value, email: fakEmail.value, api_key: fakApiKey.value }
+    const r = await integrationsApi.setFakturoidCreds(payload)
     if (r.test_ok) {
       fakTestMsg.value = { ok: true, text: t('integrations.fakturoid.test_success', { name: r.account_name || '' }) }
       fakApiKey.value = ''
+      fakClientSecret.value = ''
       await loadFakStatus()
     } else {
       fakTestMsg.value = { ok: false, text: r.test_error || 'Test connectivity selhal' }
@@ -204,6 +230,8 @@ async function deleteFakCreds() {
     fakSlug.value = ''
     fakEmail.value = ''
     fakApiKey.value = ''
+    fakClientId.value = ''
+    fakClientSecret.value = ''
     fakTestMsg.value = null
     toast.success(t('integrations.fakturoid.deleted'))
   } catch (e) {
@@ -602,38 +630,90 @@ onUnmounted(() => {
         <div class="rounded-md bg-primary-50 border border-primary-200 px-3 py-2 text-sm text-primary-700 mb-4" v-if="fakStatus?.configured">
           <strong>✓ {{ t('integrations.idoklad.configured') }}</strong>
           <span v-if="fakStatus.slug" class="ml-2 font-mono text-xs">{{ fakStatus.slug }}</span>
-          <span v-if="fakStatus.email" class="ml-2 text-xs">· {{ fakStatus.email }}</span>
+          <span v-if="fakStatus.auth_mode === 'oauth2'" class="ml-2 text-xs">· OAuth2</span>
+          <span v-else-if="fakStatus.auth_mode === 'basic'" class="ml-2 text-xs">· BasicAuth ({{ fakStatus.email }})</span>
+        </div>
+
+        <!-- OAuth2 vs BasicAuth auth mode picker -->
+        <div class="rounded-md bg-neutral-50 border border-neutral-200 p-3 mb-4">
+          <div class="flex gap-2 mb-2">
+            <button type="button" @click="fakAuthMode = 'oauth2'"
+                    class="cursor-pointer px-3 py-1.5 text-xs rounded-md border transition"
+                    :class="fakAuthMode === 'oauth2'
+                      ? 'bg-primary-600 text-white border-primary-600 font-medium'
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:border-neutral-400'">
+              {{ t('integrations.fakturoid.mode_oauth') }}
+            </button>
+            <button type="button" @click="fakAuthMode = 'basic'"
+                    class="cursor-pointer px-3 py-1.5 text-xs rounded-md border transition"
+                    :class="fakAuthMode === 'basic'
+                      ? 'bg-primary-600 text-white border-primary-600 font-medium'
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:border-neutral-400'">
+              {{ t('integrations.fakturoid.mode_basic') }}
+            </button>
+          </div>
+          <p class="text-xs text-neutral-600 leading-relaxed">
+            {{ fakAuthMode === 'oauth2'
+              ? t('integrations.fakturoid.mode_oauth_hint')
+              : t('integrations.fakturoid.mode_basic_hint') }}
+          </p>
         </div>
 
         <div class="space-y-3">
-          <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.slug') }} *</label>
+            <input v-model="fakSlug" type="text" maxlength="64"
+                   class="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm font-mono"
+                   placeholder="moje-firma" />
+            <p class="text-xs text-neutral-500 mt-1">{{ t('integrations.fakturoid.slug_hint') }}</p>
+          </div>
+
+          <!-- OAuth2 block -->
+          <template v-if="fakAuthMode === 'oauth2'">
             <div>
-              <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.slug') }} *</label>
-              <input v-model="fakSlug" type="text" maxlength="64"
+              <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.client_id') }} *</label>
+              <input v-model="fakClientId" type="text" maxlength="190"
                      class="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm font-mono"
-                     placeholder="moje-firma" />
-              <p class="text-xs text-neutral-500 mt-1">{{ t('integrations.fakturoid.slug_hint') }}</p>
+                     placeholder="abcd1234efgh5678..." />
+              <p class="text-xs text-neutral-500 mt-1">{{ t('integrations.fakturoid.client_id_hint') }}</p>
             </div>
+            <div>
+              <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.client_secret') }} *</label>
+              <div class="flex gap-2">
+                <input v-model="fakClientSecret" :type="fakShowSecret ? 'text' : 'password'" maxlength="512"
+                       class="flex-1 h-10 px-3 border border-neutral-300 rounded-md text-sm font-mono"
+                       :placeholder="fakStatus?.has_oauth ? t('integrations.fakturoid.secret_placeholder_existing') : ''" />
+                <button type="button" @click="fakShowSecret = !fakShowSecret"
+                        class="cursor-pointer h-10 px-3 border border-neutral-300 rounded-md hover:bg-neutral-50 text-sm">
+                  {{ fakShowSecret ? '🙈' : '👁' }}
+                </button>
+              </div>
+              <p class="text-xs text-neutral-500 mt-1">{{ t('integrations.fakturoid.client_secret_hint') }}</p>
+            </div>
+          </template>
+
+          <!-- Legacy BasicAuth block -->
+          <template v-else>
             <div>
               <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.email') }} *</label>
               <input v-model="fakEmail" type="email" maxlength="255"
                      class="w-full h-10 px-3 border border-neutral-300 rounded-md text-sm"
                      placeholder="me@example.com" />
             </div>
-          </div>
-          <div>
-            <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.api_key') }} *</label>
-            <div class="flex gap-2">
-              <input v-model="fakApiKey" :type="fakShowKey ? 'text' : 'password'" maxlength="512"
-                     class="flex-1 h-10 px-3 border border-neutral-300 rounded-md text-sm font-mono"
-                     :placeholder="fakStatus?.configured ? t('integrations.fakturoid.key_placeholder_existing') : ''" />
-              <button type="button" @click="fakShowKey = !fakShowKey"
-                      class="cursor-pointer h-10 px-3 border border-neutral-300 rounded-md hover:bg-neutral-50 text-sm">
-                {{ fakShowKey ? '🙈' : '👁' }}
-              </button>
+            <div>
+              <label class="block text-sm text-neutral-700 mb-1">{{ t('integrations.fakturoid.api_key') }} *</label>
+              <div class="flex gap-2">
+                <input v-model="fakApiKey" :type="fakShowKey ? 'text' : 'password'" maxlength="512"
+                       class="flex-1 h-10 px-3 border border-neutral-300 rounded-md text-sm font-mono"
+                       :placeholder="fakStatus?.has_basic ? t('integrations.fakturoid.key_placeholder_existing') : ''" />
+                <button type="button" @click="fakShowKey = !fakShowKey"
+                        class="cursor-pointer h-10 px-3 border border-neutral-300 rounded-md hover:bg-neutral-50 text-sm">
+                  {{ fakShowKey ? '🙈' : '👁' }}
+                </button>
+              </div>
+              <p class="text-xs text-neutral-500 mt-1">{{ t('integrations.fakturoid.key_hint') }}</p>
             </div>
-            <p class="text-xs text-neutral-500 mt-1">{{ t('integrations.fakturoid.key_hint') }}</p>
-          </div>
+          </template>
         </div>
 
         <div v-if="fakTestMsg" class="mt-3 rounded-md px-3 py-2 text-sm"

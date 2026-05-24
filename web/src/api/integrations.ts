@@ -52,13 +52,27 @@ export interface FakturoidCredentialsStatus {
   configured: boolean
   slug: string | null
   email: string | null
+  client_id: string | null
+  /** 'oauth2' | 'basic' | null — which auth flow is active when configured */
+  auth_mode: 'oauth2' | 'basic' | null
+  has_oauth: boolean
+  has_basic: boolean
 }
 
 export interface FakturoidCredentialsUpdateResult {
   saved: boolean
+  auth_mode: 'oauth2' | 'basic'
   test_ok: boolean
   test_error: string | null
   account_name: string | null
+}
+
+export interface FakturoidCredentialsInput {
+  slug: string
+  email?: string
+  api_key?: string
+  client_id?: string
+  client_secret?: string
 }
 
 export interface FakturoidStartParams {
@@ -112,10 +126,8 @@ export const integrationsApi = {
   // Fakturoid credentials
   getFakturoidCreds: () =>
     api.get<FakturoidCredentialsStatus>('/admin/imports/fakturoid/credentials').then(r => r.data),
-  setFakturoidCreds: (slug: string, email: string, apiKey: string) =>
-    api.put<FakturoidCredentialsUpdateResult>('/admin/imports/fakturoid/credentials', {
-      slug, email, api_key: apiKey,
-    }).then(r => r.data),
+  setFakturoidCreds: (input: FakturoidCredentialsInput) =>
+    api.put<FakturoidCredentialsUpdateResult>('/admin/imports/fakturoid/credentials', input).then(r => r.data),
   deleteFakturoidCreds: () =>
     api.delete<{ ok: boolean }>('/admin/imports/fakturoid/credentials').then(r => r.data),
   startFakturoid: (params: FakturoidStartParams = {}) =>

@@ -15,10 +15,15 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
  * GET    /api/admin/imports/fakturoid/credentials  — status
- * PUT    /api/admin/imports/fakturoid/credentials  — set + test (BasicAuth handshake)
+ * PUT    /api/admin/imports/fakturoid/credentials  — set + test
  * DELETE /api/admin/imports/fakturoid/credentials  — remove
  *
- * Body PUT: { slug, email, api_key }
+ * Body PUT (libovolná kombinace, ale aspoň jedna auth metoda musí být plná):
+ *   - slug (povinné)
+ *   - email + api_key            → legacy BasicAuth (původní personal API token)
+ *   - client_id + client_secret  → OAuth2 Client Credentials (issue #31)
+ *
+ * Pokud jsou vyplněné oba bloky, OAuth2 má prioritu při API requestech.
  */
 final class FakturoidCredentialsAction
 {
@@ -34,10 +39,20 @@ final class FakturoidCredentialsAction
         if (($user['role'] ?? '') !== 'admin') return Json::error($response, 'forbidden', 'Pouze admin.', 403);
         $supplierId = SupplierGuard::currentId($request);
         $creds = $this->fakturoid->getCredentials($supplierId);
+        $hasOAuth = $creds !== null
+            && !empty($creds['client_id'])
+            && !empty($creds['client_secret']);
+        $hasBasic = $creds !== null
+            && !empty($creds['email'])
+            && !empty($creds['api_key']);
         return Json::ok($response, [
             'configured' => $creds !== null,
-            'slug'       => $creds['slug']  ?? null,
-            'email'      => $creds['email'] ?? null,
+            'slug'       => $creds['slug']      ?? null,
+            'email'      => $creds['email']     ?? null,
+            'client_id'  => $creds['client_id'] ?? null,
+            'auth_mode'  => $hasOAuth ? 'oauth2' : ($hasBasic ? 'basic' : null),
+            'has_oauth'  => $hasOAuth,
+            'has_basic'  => $hasBasic,
         ]);
     }
 
@@ -48,30 +63,73 @@ final class FakturoidCredentialsAction
         $supplierId = SupplierGuard::currentId($request);
 
         $body = (array) ($request->getParsedBody() ?? []);
-        $slug   = trim((string) ($body['slug']   ?? ''));
-        $email  = trim((string) ($body['email']  ?? ''));
-        $apiKey = (string) ($body['api_key'] ?? '');
+        $slug         = trim((string) ($body['slug']          ?? ''));
+        $email        = trim((string) ($body['email']         ?? ''));
+        $apiKey       = (string) ($body['api_key']            ?? '');
+        $clientId     = trim((string) ($body['client_id']     ?? ''));
+        $clientSecret = (string) ($body['client_secret']      ?? '');
 
-        if ($slug === '' || $email === '' || $apiKey === '') {
-            return Json::error($response, 'validation_failed', 'slug, email i api_key jsou povinné.', 400);
+        if ($slug === '') {
+            return Json::error($response, 'validation_failed', 'Pole slug je povinné.', 400);
         }
-        if (strlen($slug) > 64 || strlen($email) > 255 || strlen($apiKey) > 512) {
-            return Json::error($response, 'validation_failed', 'Credentials přesahují délkový limit.', 400);
-        }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return Json::error($response, 'validation_failed', 'Neplatný formát emailu.', 400);
+        if (strlen($slug) > 64) {
+            return Json::error($response, 'validation_failed', 'Slug přesahuje 64 znaků.', 400);
         }
 
-        $this->fakturoid->setCredentials($supplierId, $slug, $email, $apiKey);
+        $wantsBasic = $email !== '' || $apiKey !== '';
+        $wantsOAuth = $clientId !== '' || $clientSecret !== '';
+
+        if (!$wantsBasic && !$wantsOAuth) {
+            return Json::error($response, 'validation_failed',
+                'Vyplň buď email + API token (legacy), nebo Client ID + Client Secret (OAuth2).', 400);
+        }
+
+        // Validace BasicAuth bloku (pokud aspoň jedno pole je vyplněné, vyžaduj obě)
+        if ($wantsBasic) {
+            if ($email === '' || $apiKey === '') {
+                return Json::error($response, 'validation_failed',
+                    'Pro legacy BasicAuth je nutné vyplnit email i API token.', 400);
+            }
+            if (strlen($email) > 255 || strlen($apiKey) > 512) {
+                return Json::error($response, 'validation_failed', 'Email/API token přesahuje délkový limit.', 400);
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return Json::error($response, 'validation_failed', 'Neplatný formát emailu.', 400);
+            }
+        }
+
+        // Validace OAuth2 bloku
+        if ($wantsOAuth) {
+            if ($clientId === '' || $clientSecret === '') {
+                return Json::error($response, 'validation_failed',
+                    'Pro OAuth2 je nutné vyplnit Client ID i Client Secret.', 400);
+            }
+            if (strlen($clientId) > 190 || strlen($clientSecret) > 512) {
+                return Json::error($response, 'validation_failed',
+                    'Client ID / Client Secret přesahuje délkový limit.', 400);
+            }
+        }
+
+        if ($wantsBasic) {
+            $this->fakturoid->setCredentials($supplierId, $slug, $email, $apiKey);
+        }
+        if ($wantsOAuth) {
+            $this->fakturoid->setOAuthCredentials($supplierId, $slug, $clientId, $clientSecret);
+        }
+
         $userId = (int) ($user['id'] ?? 0);
         $ip = $this->ipMatcher->clientIpFromRequest($request->getServerParams());
         $this->logger->log('import.fakturoid_credentials_set', $userId, 'supplier', $supplierId, [
-            'slug' => $slug, 'email' => $email,
+            'slug'      => $slug,
+            'email'     => $email !== '' ? $email : null,
+            'client_id' => $clientId !== '' ? $clientId : null,
+            'auth_mode' => $wantsOAuth ? 'oauth2' : 'basic',
         ], $ip, $request->getHeaderLine('User-Agent'));
 
         $test = $this->fakturoid->testConnection($supplierId);
         return Json::ok($response, [
             'saved'        => true,
+            'auth_mode'    => $wantsOAuth ? 'oauth2' : 'basic',
             'test_ok'      => $test['ok'],
             'test_error'   => $test['ok'] ? null : ($test['error'] ?? null),
             'account_name' => $test['account_name'] ?? null,
@@ -83,7 +141,7 @@ final class FakturoidCredentialsAction
         $user = (array) $request->getAttribute(AuthMiddleware::ATTR_USER, []);
         if (($user['role'] ?? '') !== 'admin') return Json::error($response, 'forbidden', 'Pouze admin.', 403);
         $supplierId = SupplierGuard::currentId($request);
-        $this->fakturoid->setCredentials($supplierId, '', '', '');
+        $this->fakturoid->clearCredentials($supplierId);
         $userId = (int) ($user['id'] ?? 0);
         $ip = $this->ipMatcher->clientIpFromRequest($request->getServerParams());
         $this->logger->log('import.fakturoid_credentials_removed', $userId, 'supplier', $supplierId, null,
