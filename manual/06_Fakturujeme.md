@@ -173,20 +173,23 @@ Aby bylo úplně jasno, kde je hranice:
 - Bankovní importy (FIO, KB, ČSOB) a párování plateb podle VS
 - ARES + VIES lookup (autocomplete IČO/DIČ)
 - Export pro účetní: **Pohoda XML, ISDOC, PDF ZIP**
+- XML pro EPO portál MFČR: **DPH přiznání (DPHDP3), kontrolní hlášení,
+  souhrnné hlášení** — jako pomůcka k ověření s účetní
 
 ### MyInvoice **nedělá**
 
-- DPH přiznání ani kontrolní hlášení
 - OSS / IOSS přiznání
-- Daň z příjmů, sociální/zdravotní pojištění
+- Kompletní daň z příjmů (umí jen orientační kostru — viz
+  [25. Daň z příjmů](25_Dan_z_prijmu.md)), sociální/zdravotní pojištění
 - Účetní deník nebo hlavní knihu
 - Kalkulaci marží, skladové hospodářství
 - Mzdy, fakturace s návazností na pracovní smlouvy
 - Insolvenční registr, registr ekonomických subjektů
 
-Standardní tok je: **MyInvoice vystaví doklady → uživatel/účetní jednou
-měsíčně exportuje (Pohoda XML / ISDOC) → účetní je zaúčtuje a podá DPH /
-přiznání**. Aplikace primárně **eviduje a podává** doklady, neúčtuje je.
+Standardní tok je: **MyInvoice vystaví doklady → vygeneruje výkazy DPH →
+uživatel/účetní jednou měsíčně exportuje (Pohoda XML / ISDOC) → účetní
+doklady zaúčtuje a ověřené výkazy podá**. Aplikace primárně **eviduje,
+podává a generuje výkazy** z dokladů, neúčtuje je.
 
 ## 6.6 Když si nejsi jistý
 

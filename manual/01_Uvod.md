@@ -175,16 +175,22 @@ Bezpečnost stojí na pěti vrstvách (detail v [20. Bezpečnost](20_Bezpecnost.
 
 ## 1.13 Co MyInvoice **nedělá**
 
-MyInvoice je **fakturační**, ne účetní systém. Mimo scope jsou:
+MyInvoice je primárně **fakturační**, ne plnohodnotný účetní systém. Nad
+rámec fakturace umí z evidovaných dokladů vygenerovat XML pro EPO portál
+MFČR — viz [24. Výkazy DPH](24_Vykazy_DPH.md) (DPHDP3 + kontrolní hlášení +
+souhrnné hlášení) a [25. Daň z příjmů](25_Dan_z_prijmu.md) (DPFO/DPPO,
+zatím jen orientační kostra). Tyto výkazy jsou **pomůcka** — před podáním
+je vždy ověř s účetní nebo daňovým poradcem.
 
-- Přiznání k DPH a kontrolní hlášení
-- Daň z příjmů, mzdová agenda, daňová evidence
-- Účetní deník, hlavní kniha, rozvaha, výsledovka
-- Skladová evidence, výroba
+Mimo scope naopak zůstává:
 
-Standardní workflow je: ve MyInvoice vystavíš a evidovat doklady, jednou
-měsíčně exportuješ ISDOC nebo Pohoda XML a předáš účetní (nebo nahraješ
-do účetního programu).
+- Mzdová agenda a personalistika
+- Daňová evidence, účetní deník, hlavní kniha, rozvaha, výsledovka
+- Skladová evidence a výroba
+
+Standardní workflow je: ve MyInvoice vystavíš a eviduješ doklady, vygeneruješ
+výkazy DPH a jednou měsíčně exportuješ ISDOC nebo Pohoda XML a předáš účetní
+(nebo nahraješ do účetního programu).
 
 ## 1.14 Co manuál neobsahuje
 
