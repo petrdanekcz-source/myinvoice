@@ -192,6 +192,72 @@ nebo v ARES. Builder ho normalizuje (odstraní `CZ-NACE ` prefix, padne na 6
 
 Per řádek: kód, popis, základ, DPH. Hodnoty se počítají agregací `invoice_items` / `purchase_invoice_items` per `vat_classification_code`.
 
+### Jak se DPHDP3 generuje a co zahrnuje
+
+Tato sekce přesně popisuje, podle jakých pravidel se přiznání sestavuje — užitečné
+pro kontrolu proti seznamu faktur i pro účetní.
+
+#### Zdroje dat a granularita
+
+- **DPH na výstupu (ř. 1-26)** se počítá z **vystavených faktur** (`invoices`).
+- **DPH na vstupu / nárok na odpočet (ř. 40-47)** z **přijatých faktur**
+  (`purchase_invoices`).
+- **Samovyměřená daň** u reverse charge a pořízení z EU se objevuje na **obou
+  stranách** (výstup ř. 3-13 + odpočet ř. 43).
+- Agreguje se **per řádek faktury** (`*_items`), ne per faktura — kvůli kurzu cizí
+  měny a možnosti per-řádek klasifikace.
+
+#### Které doklady se zahrnou
+
+| Filtr | Pravidlo |
+|---|---|
+| **Období** | `COALESCE(tax_date, issue_date)` spadá do měsíce / kvartálu. Tj. rozhoduje **DUZP**, a pokud chybí, datum vystavení. Doklad bez vyplněného DUZP tedy nevypadne. |
+| **Stav** | Vylučují se `draft` a `cancelled`. U vystavených navíc `proforma` (zálohová faktura není daňový doklad). |
+| **Klasifikace** | Řádek se zařadí podle `vat_classification_code` (item-level override → header → auto-default podle sazby + RC + směru). Řádek bez výsledného kódu se do přiznání nedostane. |
+
+#### Přepočet měny
+
+Základ i daň se vždy převedou na **CZK** kurzem faktury (`exchange_rate`); u CZK
+faktur je kurz 1. Přiznání je vždy v korunách, částky se zaokrouhlují na celé Kč.
+
+#### Mapování na řádky přiznání
+
+| Řádek | Co obsahuje | Typický kód |
+|---|---|---|
+| **1 / 2** | Tuzemská zdanitelná plnění na výstupu 21 % / 12 % | 1 / 2 |
+| **3 / 4** | Pořízení zboží z JČS (samovyměření) 21 % / 12 % | 23 |
+| **5 / 6** | Přijetí služby z EU | 24 |
+| **7 / 8** | Dovoz zboží ze 3. země | 25 |
+| **10 / 11** | Tuzemský reverse charge (příjemce) | 5 |
+| **12 / 13** | Přijetí služby ze 3. země | (custom) |
+| **20-26** (oddíl C) | Dodání zboží do EU, vývoz, služby do JČS — **osvobozená plnění s nárokem na odpočet, jen základ bez daně** | 20 / 22 / 26 |
+| **40 / 41** | Nárok na odpočet — tuzemsko 21 % / 12 % | 40 / 41 |
+| **43** | Nárok na odpočet u samovyměřené daně (zrcadlo ř. 3-13) | (secondary) |
+| **47** | Hodnota pořízeného dlouhodobého majetku — **doplňující údaj** k ř. 40-45 | flag majetek |
+
+> [!NOTE]
+> **Oddíl C (ř. 20-26)** — dodání do EU (`dod_zb`), vývoz (`pln_vyvoz`), služby do
+> JČS (`pln_sluzby`) a další — se generuje do elementu `Veta2`. Jde o osvobozená
+> plnění, na DPHDP3 se uvádí **jen základ** (žádná daň), ale ovlivňují vypořádací
+> koeficient (ř. 51-53).
+
+#### Samovyměření daně u reverse charge
+
+U reverse charge (faktura s `reverse_charge=1` **nebo** klasifikační kód s příznakem
+`is_reverse_charge` — kódy 5 a 23) vendor fakturuje **bez DPH**. Aplikace daň
+**dopočítá** ze základu: `daň_CZK = základ_CZK × sazba / 100`. Tatáž částka se uvede
+dvakrát:
+- na **výstupu** (ř. 3 u zboží z EU, ř. 10 u tuzemského RC, ř. 5/12 u služeb),
+- na **vstupu** jako odpočet na **ř. 43** (přes `dphdp3_line_secondary`).
+
+Net dopad na vlastní daň je tedy nulový (daň = odpočet), pokud máš plný nárok.
+
+#### Vlastní daň vs. nadměrný odpočet
+
+`vlastní daň = DPH na výstupu − nárok na odpočet`. Kladná hodnota = daň k úhradě FÚ;
+záporná = nadměrný odpočet. Atribut `trans` ve `VetaD` se nastaví `A` (vznikla
+povinnost) / `N` podle znaménka.
+
 ### Jak fungují VAT klasifikační kódy
 
 Každá faktura (nebo její řádek) má `vat_classification_code` (např. "1", "40", "5", "20"). Tento kód určuje na který **řádek DPH přiznání** položka patří.
@@ -270,6 +336,44 @@ KH se podává **vždy měsíčně** s sekcemi:
 - **B.3** — Přijatá tuzemská plnění do 10 000 Kč (sumace)
 
 UI ukazuje **count řádků per sekce** + deadline countdown.
+
+### Pravidla zařazení do sekcí
+
+Aby v reálně podaném KH seděly sekce, řídí se zařazení dokladů těmito pravidly
+(odpovídají metodice GFŘ a opravám z reportu #35):
+
+| Pravidlo | Detail |
+|---|---|
+| **Období** | `COALESCE(tax_date, issue_date)` v daném měsíci — DUZP, fallback datum vystavení. Doklad **bez DUZP** se zařadí podle data vystavení (nevypadne). |
+| **Stav** | Bez `draft` a `cancelled` (storno je součást auditní stopy, do KH nepatří). |
+| **Práh 10 000 Kč** | Porovnává se **`abs()` celkové částky vč. DPH** — záporný dobropis nad limit (např. −25 000 Kč) jde tedy správně do A.4/B.2 jednotlivě, ne do sumace. |
+| **DIČ protistrany** | Do A.4/B.2 patří jen plnění **nad limit a s DIČ** plátce. Plnění **bez DIČ** (B2C, doklad od neplátce) jde do sumace **A.5/B.3 bez ohledu na částku** — dříve se nad limit bez DIČ tiše zahazovalo. |
+| **Jen zdanitelná plnění** | Do A.4/A.5/B.2/B.3 patří jen plnění se **zdanitelným základem 21/12 %**. Osvobozená, EU dodání, vývoz a reverse charge (kde je uložená sazba 0) se sem **nezařazují** (netvoří nulové řádky). |
+
+#### Kam který doklad patří
+
+- **A.1** (vystavené RC) — faktury v režimu přenesené daňové povinnosti (dodavatel).
+  Detekce: klasifikační kód s `is_reverse_charge` **nebo** příznak `reverse_charge`
+  na faktuře. Vyžaduje DIČ odběratele.
+- **A.2** (pořízení zboží z JČS) — přijaté faktury s klasifikací `kh_section = 'A.2'`
+  (typicky kód 23). Daň je **samovyměřená** (počítá se ze základu × sazba).
+  **Nezařadí se zároveň do B.2** ani do B.1.
+- **A.4 / A.5** (vystavená tuzemská) — viz pravidla v tabulce výše.
+- **B.1** (přijaté RC) — **tuzemský** reverse charge (kód 5 / `is_reverse_charge`).
+  Pořízení z JČS (A.2) sem **nepatří**, i když je také samovyměřené.
+- **B.2 / B.3** (přijatá tuzemská) — analogicky k A.4/A.5. Vylučují se doklady,
+  které patří do A.2 / B.1 / reverse charge (aby se neduplikovaly).
+
+> [!NOTE]
+> **Rekapitulace (VetaC)** sčítá obraty napříč sekcemi. `rez_pren5` (RC ve snížené
+> sazbě) je vždy `0` — tuzemský reverse charge je v ČR vždy v základní sazbě 21 %.
+
+#### Atributy A.2 (pořízení z JČS)
+
+`k_stat` (země dodavatele), `vatid_dod` (DIČ bez prefixu země), `c_evid_dd` (číslo
+dokladu dodavatele), `dppd` (datum povinnosti přiznat daň), `zakl_dane1/dan1` (21 %),
+`zakl_dane2/dan2` (12 %). Daň se dopočítá ze základu × sazba/100, protože vendor
+fakturuje bez DPH.
 
 ## Kniha DPH (měsíční VAT žurnál)
 
@@ -359,7 +463,7 @@ Pokud se sazba změní, postupuj:
 → Auto-default by ho měl přiřadit. Pokud ne, znamená to, že VAT sazba na řádku nemá v `vat_classifications` defaultní kód. Buď přidej kód v Codebooks, nebo vyber manual v editoru.
 
 ### "DIČ klienta není ve formátu CZxxxxxxxx"
-→ Pro KH XML potřebuje DIČ být čisté číslo (bez prefixu CZ). Systém to ořezává automaticky, ale pokud klient nemá DIČ, A.4/B.2 řádky ho budou mít prázdné — ověř že klient má DIČ vyplněné.
+→ Pro KH XML potřebuje DIČ být čisté číslo (bez prefixu CZ). Systém to ořezává automaticky. Pokud klient **nemá DIČ**, doklad se zařadí do **sumační sekce A.5 (resp. B.3)** bez ohledu na částku — do A.4/B.2, kde je DIČ povinné, se nedostane. Pokud doklad do A.4/B.2 patřit má (protistrana je plátce), doplň jí DIČ.
 
 ## Podpora pro daňového poradce
 
