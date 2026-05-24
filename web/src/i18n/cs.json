@@ -1494,7 +1494,8 @@
       "invoice_reminder": "Upomínka faktury",
       "proforma_reminder": "Připomínka zálohové faktury",
       "invoice_approval": "Žádost o schválení výkazu",
-      "password_reset": "Reset hesla"
+      "password_reset": "Reset hesla",
+      "login_otp": "Ověřovací kód pro přihlášení"
     },
     "self_delete_warning": "Nelze smazat vlastní účet."
   },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive, watch } from 'vue'
+import { ref, onMounted, reactive, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { settingsApi, type VatRate, type Country, type CurrencyAccount, type Unit } from '@/api/settings'
 import { suppliersApi, type SupplierListItem, type SupplierCreatePayload } from '@/api/suppliers'
@@ -192,6 +192,18 @@ async function deleteCurrency(c: CurrencyAccount) {
 // ─── VAT rates ────────────────────────────────────────────
 const vatDraft = reactive<Partial<VatRate> & { _new?: boolean }>({})
 const vatOpen = ref(false)
+
+// Platná sazba = dnešek spadá do intervalu valid_from..valid_to
+function isVatValid(v: VatRate): boolean {
+  const today = new Date().toISOString().slice(0, 10)
+  if (v.valid_from && v.valid_from > today) return false
+  if (v.valid_to && v.valid_to < today) return false
+  return true
+}
+// Nejdřív platné sazby, pak ostatní (stabilní řazení v rámci skupin)
+const sortedVatRates = computed(() =>
+  [...vatRates.value].sort((a, b) => (isVatValid(a) ? 0 : 1) - (isVatValid(b) ? 0 : 1))
+)
 function newVat() {
   Object.assign(vatDraft, {
     id: undefined, code: '', rate_percent: 21, country: 'CZ',
@@ -692,7 +704,7 @@ watch(tab, (newTab) => {
             </tr>
           </thead>
           <tbody class="divide-y divide-neutral-100">
-            <tr v-for="v in vatRates" :key="v.id">
+            <tr v-for="v in sortedVatRates" :key="v.id" :class="isVatValid(v) ? 'font-semibold' : 'text-neutral-400'">
               <td class="px-3 py-2 text-center font-mono">{{ v.country }}</td>
               <td class="px-3 py-2 font-mono text-xs">{{ v.code }}</td>
               <td class="px-3 py-2 text-right font-mono">{{ v.rate_percent }} %</td>
@@ -715,7 +727,7 @@ watch(tab, (newTab) => {
 
         <!-- Mobile: karty -->
         <div class="md:hidden divide-y divide-neutral-100">
-          <div v-for="v in vatRates" :key="`m-${v.id}`" class="p-3 space-y-1.5">
+          <div v-for="v in sortedVatRates" :key="`m-${v.id}`" class="p-3 space-y-1.5" :class="{ 'opacity-50': !isVatValid(v) }">
             <div class="flex items-baseline justify-between gap-2">
               <div class="flex items-baseline gap-2">
                 <span class="font-mono text-xs">{{ v.country }}</span>

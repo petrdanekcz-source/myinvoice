@@ -1494,7 +1494,8 @@
       "invoice_reminder": "Invoice reminder",
       "proforma_reminder": "Proforma reminder",
       "invoice_approval": "Work-report approval request",
-      "password_reset": "Password reset"
+      "password_reset": "Password reset",
+      "login_otp": "Sign-in verification code"
     },
     "self_delete_warning": "Cannot delete your own account."
   },
