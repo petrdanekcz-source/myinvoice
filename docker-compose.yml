@@ -49,10 +49,12 @@ services:
     image: mariadb:11
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-changeme}
+      # Fail-closed: bez .env se stack nespustí (žádný předvídatelný default).
+      # docker-install.{sh,ps1} vygeneruje .env s náhodnými hesly před `up`.
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD required — spusť cmd/docker-install nebo vytvoř .env}
       MARIADB_DATABASE: ${DB_NAME:-myinvoice}
       MARIADB_USER: ${DB_USER:-myinvoice}
-      MARIADB_PASSWORD: ${DB_PASSWORD:-changeme}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required — spusť cmd/docker-install nebo vytvoř .env}
       TZ: Europe/Prague
     volumes:
       - db-data:/var/lib/mysql

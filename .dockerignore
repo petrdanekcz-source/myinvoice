@@ -16,9 +16,13 @@ web/dist
 manual/generated
 manual/manual.pdf
 
-# Local-only
+# Local-only — secrets, NESMÍ se dostat do image (vše se čte z hostu:
+# .env přes compose var-substituci, cfg.docker.php přes read-only bind-mount).
 cfg.php
 cfg.local.php
+cfg.docker.php
+.env
+.env.*
 log
 storage
 private

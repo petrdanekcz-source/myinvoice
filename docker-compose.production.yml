@@ -46,10 +46,12 @@ services:
     image: mariadb:11
     restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-changeme}
+      # Fail-closed: bez .env se stack nespustí (žádný předvídatelný default).
+      # Vytvoř .env s DB_PASSWORD a DB_ROOT_PASSWORD (viz hlavička výše).
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD required — vytvoř .env (viz hlavička souboru)}
       MARIADB_DATABASE: ${DB_NAME:-myinvoice}
       MARIADB_USER: ${DB_USER:-myinvoice}
-      MARIADB_PASSWORD: ${DB_PASSWORD:-changeme}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD required — vytvoř .env (viz hlavička souboru)}
       TZ: Europe/Prague
     volumes:
       - db-data:/var/lib/mysql
