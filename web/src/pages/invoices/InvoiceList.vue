@@ -713,12 +713,21 @@ const monthOptions = computed(() => (tm('common.months_short') as unknown as str
                       {{ formatDate(inv.due_date) }}
                     </span>
                   </div>
-                  <div class="flex items-center gap-1 flex-wrap justify-end">
+                  <div class="flex items-center gap-1 flex-wrap justify-end" @click.stop>
                     <span v-if="inv.sent_at" class="text-xs px-1 py-0.5 rounded bg-success-50 text-success-600"
                       :title="t('invoice.sent_at', { date: formatDate(inv.sent_at) })">✉</span>
                     <span v-if="inv.reminder_count > 0" class="text-xs px-1 py-0.5 rounded bg-warning-50 text-warning-600 font-semibold"
                       :title="t('invoice.reminder_at', { count: inv.reminder_count, date: formatDate(inv.last_reminder_at) })">⚠ {{ inv.reminder_count }}</span>
-                    <span class="text-xs px-2 py-0.5 rounded" :class="statusBadgeClass(inv.status)">
+                    <!-- Pro koncepty s workflow projektem (nebo s již vytvořeným výkazem)
+                         zobraz tlačítko "Výkaz" místo "KONCEPT" badge — stejně jako v desktop tabulce. -->
+                    <button v-if="inv.status === 'draft' && (inv.project_requires_approval || inv.has_work_report)"
+                      @click="openWorkReport(inv.id)"
+                      class="cursor-pointer text-xs px-2 py-0.5 rounded border border-primary-500/40 text-primary-700 hover:bg-primary-50 inline-flex items-center gap-1"
+                      :title="t('invoice.wr_btn')">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-6m3 6v-4m3 4v-2"/></svg>
+                      {{ t('invoice.wr_btn') }}
+                    </button>
+                    <span v-else class="text-xs px-2 py-0.5 rounded" :class="statusBadgeClass(inv.status)">
                       {{ statusLabel(inv.status) }}
                     </span>
                   </div>
