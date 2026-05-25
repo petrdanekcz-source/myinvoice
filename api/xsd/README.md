@@ -1,11 +1,16 @@
-# XSD schémata EPO MFČR
+# XSD schémata
 
-Commitnutá veřejná schémata MFČR pro **automatickou XSD validation** vygenerovaných
-EPO XML výkazů (DPH/KH/SH/DPFO/DPPO). Aktuální ročník je v repo — clone má
-funkční validaci bez setup kroku. Při novém ročníku MFČR re-stáhnout přes
-`bash cmd/download-xsd.sh` nebo `cmd\download-xsd.cmd`.
+Commitnutá veřejná schémata pro **automatickou XSD validaci** vygenerovaného XML:
 
-## Zdroje
+1. **EPO MFČR** výkazy (DPH/KH/SH/DPFO/DPPO) — validace daňových podání.
+2. **ISDOC 6.0.2** (`isdoc-invoice-6.0.2.xsd`) — validace exportu faktur; ověřuje
+   ji unit test `tests/Unit/Service/Export/IsdocExporterSchemaTest`.
+
+Aktuální verze jsou v repo — clone má funkční validaci bez setup kroku. Re-stáhnout
+přes `bash cmd/download-xsd.sh` nebo `cmd\download-xsd.cmd` (při novém ročníku MFČR,
+příp. nové verzi ISDOC).
+
+## Zdroje EPO MFČR
 
 📋 **Seznam schémat (popis struktury):**
 https://adisspr.mfcr.cz/dpr/adis/idpr_pub/epo2_info/popis_struktury_seznam.faces
@@ -22,6 +27,23 @@ https://adisspr.mfcr.cz/dpr/adis/idpr_pub/epo2_info/popis_struktury_seznam.faces
 
 > **Pozn.:** soubor zde **musí mít jméno bez `_epo2` suffixu** (např. `dphdp3.xsd`, ne
 > `dphdp3_epo2.xsd`). XmlSchemaValidator hledá `storage/xsd/{form_code}.xsd`.
+
+## Zdroj ISDOC
+
+📋 **Aktuální verze standardu (odkazy MV ČR):**
+https://mv.gov.cz/isdoc/clanek/aktualni-verze.aspx
+
+📥 **Přímé URL k XSD:**
+
+| Filename | Standard | URL |
+|---|---|---|
+| `isdoc-invoice-6.0.2.xsd` | ISDOC 6.0.2 (faktura) | https://isdoc.cz/6.0.2/xsd/isdoc-invoice-6.0.2.xsd |
+
+> **Pozor — XSD vs. business rules:** schéma ISDOC 6.0.2 neobsahuje žádný `<xs:assert>`
+> a `*Curr` elementy (cizoměnové částky) jsou `minOccurs="0"`. XSD validace tedy ověří
+> jen strukturu, pořadí a typy — **ne** pravidla jako „doklad v cizí měně musí nést
+> `LineExtensionAmountCurr`". `<UnitPrice>` je dle standardu vždy v `LocalCurrencyCode`
+> (CZK); `*Curr` sourozenci nesou hodnoty v `ForeignCurrencyCode`.
 
 ## Bez schémat
 

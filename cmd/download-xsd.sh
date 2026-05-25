@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# Stáhne XSD schémata EPO MFČR do api/xsd/ — typicky 1× ročně po vydání nových
-# verzí na MFČR portálu (typically leden). Default check-in má aktuální verze.
+# Stáhne XSD schémata do api/xsd/: EPO MFČR výkazy (DPH/KH/SH/DPFO/DPPO) +
+# ISDOC 6.0.2 (formát faktur). EPO se mění typicky 1× ročně (leden), ISDOC
+# zřídka. Default check-in má aktuální verze.
 #
 # Použití:
-#   bash cmd/download-xsd.sh           — stáhne všech 5 schémat
-#   bash cmd/download-xsd.sh dphkh1    — stáhne jen jedno
+#   bash cmd/download-xsd.sh           — stáhne všechna schémata (EPO + ISDOC)
+#   bash cmd/download-xsd.sh dphkh1    — stáhne jen jedno EPO schema
+#   bash cmd/download-xsd.sh isdoc     — stáhne jen ISDOC schema
 #
-# Zdroj: https://adisspr.mfcr.cz/dpr/adis/idpr_pub/epo2_info/popis_struktury_seznam.faces
+# Zdroje:
+#   EPO:   https://adisspr.mfcr.cz/dpr/adis/idpr_pub/epo2_info/popis_struktury_seznam.faces
+#   ISDOC: https://mv.gov.cz/isdoc/clanek/aktualni-verze.aspx
 
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)/api/xsd"
 BASE="https://adisspr.mfcr.cz/adis/jepo/schema"
-FORMS=("dphdp3" "dphkh1" "dphshv" "dpfdp5" "dppdp9")
+ISDOC_URL="https://isdoc.cz/6.0.2/xsd/isdoc-invoice-6.0.2.xsd"
+FORMS=("dphdp3" "dphkh1" "dphshv" "dpfdp5" "dppdp9" "isdoc")
 
 mkdir -p "$DIR"
 
@@ -21,8 +26,13 @@ if [[ $# -gt 0 ]]; then
 fi
 
 for form in "${FORMS[@]}"; do
-    url="${BASE}/${form}_epo2.xsd"
-    target="${DIR}/${form}.xsd"
+    if [[ "$form" == "isdoc" ]]; then
+        url="$ISDOC_URL"
+        target="${DIR}/isdoc-invoice-6.0.2.xsd"
+    else
+        url="${BASE}/${form}_epo2.xsd"
+        target="${DIR}/${form}.xsd"
+    fi
     echo "→ ${form}: ${url}"
     if curl -sSfL "$url" -o "$target.tmp"; then
         # Sanity check: musí začínat XML deklarací

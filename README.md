@@ -117,7 +117,7 @@ alternativa s důrazem na:
 
 ### 📦 Exporty pro účetní
 - **Hromadný export PDF** (ZIP po měsících) — vystavených i přijatých
-- **ISDOC 6.0.2** — český národní standard pro B2B výměnu faktur
+- **ISDOC 6.0.2** — český národní standard pro B2B výměnu faktur; export se v testech validuje proti oficiálnímu XSD (`api/xsd/isdoc-invoice-6.0.2.xsd`)
 - **Pohoda XML** (Stormware data package) — přímý import do Pohody bez ručního opisu
 - Per-dodavatel konfigurace Pohoda kódů (středisko, činnost, předkontace, číselná řada)
 
