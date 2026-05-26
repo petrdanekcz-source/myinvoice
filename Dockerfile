@@ -100,7 +100,7 @@ RUN echo '<?php return [];' > cfg.php && chown www-data:www-data cfg.php
 # bez env), aplikace fallbackuje na log/, storage/, private/ v rootu repa.
 RUN mkdir -p /data/log /data/storage /data/private \
  && chown -R www-data:www-data /data
-VOLUME ["/data"]
+# VOLUME ["/data"]  # disabled for Railway — using Railway Volumes instead
 
 # Default stateful adresáře uvnitř image (fallback pro custom compose bez DATA_DIR).
 RUN mkdir -p log storage private && chown -R www-data:www-data log storage private
